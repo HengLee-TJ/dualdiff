@@ -74,6 +74,9 @@
     caseSensitive: false,
     codeOnly: true,
     typeFilter: "all",
+    collapseContext: true,
+    contextLines: 3,
+    changeCursor: 0,
     customIgnores: "node_modules\ndist\nbuild\n.git\nDebug\nRelease\nobj\nbin",
     scanning: false,
   };
@@ -635,10 +638,59 @@
     host.querySelectorAll(".file-row").forEach((btn) => {
       btn.addEventListener("click", () => {
         state.activePath = btn.getAttribute("data-path");
+        state.changeCursor = 0;
         renderTree();
         renderDiff();
       });
     });
+  }
+
+  function isChangeOp(op) {
+    return op && op.type !== "ctx";
+  }
+
+  function countChanges(ops) {
+    // count contiguous change groups (hunks)
+    let n = 0;
+    for (let i = 0; i < ops.length; i++) {
+      if (isChangeOp(ops[i]) && (i === 0 || !isChangeOp(ops[i - 1]))) n++;
+    }
+    return n;
+  }
+
+  /**
+   * Fold long unchanged runs so only `contextLines` around each change remain.
+   * Returns [{kind:'op',op}|{kind:'fold',from,to,count}]
+   */
+  function foldOps(ops, context) {
+    if (!state.collapseContext) return ops.map((op) => ({ kind: "op", op }));
+    const n = ops.length;
+    const keep = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (isChangeOp(ops[i])) {
+        for (let j = Math.max(0, i - context); j <= Math.min(n - 1, i + context); j++) keep[j] = 1;
+      }
+    }
+    // if no changes, keep nothing special
+    const out = [];
+    let i = 0;
+    while (i < n) {
+      if (keep[i]) {
+        out.push({ kind: "op", op: ops[i] });
+        i++;
+      } else {
+        let j = i;
+        while (j < n && !keep[j]) j++;
+        out.push({ kind: "fold", start: i, end: j - 1, count: j - i });
+        i = j;
+      }
+    }
+    return out;
+  }
+
+  function foldLabel(item) {
+    const a0 = item.start;
+    return `⋯ ${item.count} 行未变更 · 展开`;
   }
 
   function renderDiff() {
@@ -651,12 +703,18 @@
     const tabB = $("tabB");
     if (!codeA || !codeB) return;
 
+    const changeInfo = $("changeInfo");
+    const prevBtn = $("prevChange");
+    const nextBtn = $("nextChange");
+    const foldBtn = $("foldToggle");
+
     if (!row) {
       tabA.textContent = "—";
       tabB.textContent = "—";
       codeA.innerHTML = "";
       codeB.innerHTML = "";
       if (paneU) paneU.innerHTML = "";
+      if (changeInfo) changeInfo.textContent = "";
       return;
     }
 
@@ -664,6 +722,19 @@
     tabB.textContent = row.name;
     const dp = $("diffPath");
     if (dp) dp.textContent = row.path;
+
+    const nChanges = countChanges(row.ops || []);
+    if (changeInfo) {
+      changeInfo.textContent = nChanges
+        ? `${Math.min(state.changeCursor + 1, nChanges)} / ${nChanges}`
+        : "0";
+    }
+    if (prevBtn) prevBtn.disabled = !nChanges;
+    if (nextBtn) nextBtn.disabled = !nChanges;
+    if (foldBtn) {
+      foldBtn.classList.toggle("on", state.collapseContext);
+      foldBtn.title = state.collapseContext ? "折叠未变更（开）" : "折叠未变更（关）";
+    }
 
     if (row.binary) {
       const msg = row.status === "same" ? "二进制内容一致" : "二进制文件内容不同（已跳过行 diff）";
@@ -673,56 +744,117 @@
       return;
     }
 
-    const ops = row.ops;
-    // split view
+    const ops = row.ops || [];
+    const folded = foldOps(ops, state.contextLines);
     const left = [];
     const right = [];
-    for (const op of ops) {
+    const uni = [];
+    let changeIdx = -1;
+    let prevWasChange = false;
+
+    for (let fi = 0; fi < folded.length; fi++) {
+      const item = folded[fi];
+      if (item.kind === "fold") {
+        const label = `⋯ ${item.count}`;
+        left.push(`<button type="button" class="fold-bar" data-unfold="1">${label}</button>`);
+        right.push(`<button type="button" class="fold-bar" data-unfold="1">${label}</button>`);
+        uni.push(`<button type="button" class="fold-bar" data-unfold="1">${label}</button>`);
+        prevWasChange = false;
+        continue;
+      }
+      const op = item.op;
+      const ch = isChangeOp(op);
+      const startsChange = ch && !prevWasChange;
+      if (startsChange) changeIdx++;
+      const changeAttr = ch ? ` data-change-idx="${Math.max(changeIdx, 0)}"` : "";
+      const mark = startsChange ? " change-start" : "";
+      prevWasChange = ch;
+
       const aEmpty = op.aText == null;
       const bEmpty = op.bText == null;
       const aCls = aEmpty ? "blank" : op.type === "add" ? "blank" : op.type === "del" ? "del" : "ctx";
       const bCls = bEmpty ? "blank" : op.type === "del" ? "blank" : op.type === "add" ? "add" : "ctx";
       left.push(
-        `<div class="line ${aCls}"><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${
+        `<div class="line ${aCls}${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${
           aEmpty ? "" : hlWord(op.aText, op.hlA)
         }</span></div>`
       );
       right.push(
-        `<div class="line ${bCls}"><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">${
+        `<div class="line ${bCls}${mark}"${changeAttr}><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">${
           bEmpty ? "" : hlWord(op.bText, op.hlB)
         }</span></div>`
       );
+
+      if (op.type === "ctx") {
+        uni.push(
+          `<div class="line ctx"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${esc(
+            op.aText ?? ""
+          )}</span></div>`
+        );
+      } else if (op.type === "del") {
+        uni.push(
+          `<div class="line del${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">− ${hlWord(
+            op.aText ?? "",
+            op.hlA
+          )}</span></div>`
+        );
+      } else if (op.type === "add") {
+        uni.push(
+          `<div class="line add${mark}"${changeAttr}><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">+ ${hlWord(
+            op.bText ?? "",
+            op.hlB
+          )}</span></div>`
+        );
+      }
     }
+
     codeA.innerHTML = left.join("");
     codeB.innerHTML = right.join("");
+    if (paneU) paneU.innerHTML = uni.join("");
 
-    if (paneU) {
-      const u = [];
-      for (const op of ops) {
-        if (op.type === "ctx") {
-          u.push(
-            `<div class="line ctx"><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${esc(
-              op.aText ?? ""
-            )}</span></div>`
-          );
-        } else if (op.type === "del") {
-          u.push(
-            `<div class="line del"><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">− ${hlWord(
-              op.aText ?? "",
-              op.hlA
-            )}</span></div>`
-          );
-        } else if (op.type === "add") {
-          u.push(
-            `<div class="line add"><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">+ ${hlWord(
-              op.bText ?? "",
-              op.hlB
-            )}</span></div>`
-          );
-        }
+    // expand folds
+    document.querySelectorAll(".fold-bar").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.collapseContext = false;
+        if (foldBtn) foldBtn.classList.add("on");
+        renderDiff();
+      });
+    });
+
+    // auto-scroll to first (or current) change
+    requestAnimationFrame(() => scrollToChange(state.changeCursor));
+  }
+
+  function scrollToChange(idx) {
+    const panes = [$("codeA"), $("codeB"), $("paneU")].filter(Boolean);
+    const targetIdx = Math.max(0, idx);
+    let first = null;
+    for (const pane of panes) {
+      const el = pane.querySelector(`[data-change-idx="${targetIdx}"]`);
+      if (el) {
+        const top = el.offsetTop - pane.clientHeight * 0.25;
+        pane.scrollTop = Math.max(0, top);
+        el.classList.add("flash");
+        if (!first) first = el;
+        setTimeout(() => el.classList.remove("flash"), 900);
       }
-      paneU.innerHTML = u.join("");
     }
+  }
+
+  function gotoChange(delta) {
+    const row = state.results.find((x) => x.path === state.activePath);
+    if (!row || !row.ops) return;
+    const n = countChanges(row.ops);
+    if (!n) return;
+    state.changeCursor = ((state.changeCursor + delta) % n + n) % n;
+    const info = $("changeInfo");
+    if (info) info.textContent = `${state.changeCursor + 1} / ${n}`;
+    scrollToChange(state.changeCursor);
+  }
+
+  function toggleCollapse() {
+    state.collapseContext = !state.collapseContext;
+    renderDiff();
   }
 
   function hlWord(text, mark) {
@@ -1268,7 +1400,24 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       $("chkCodeOnly")?.classList.toggle("on", state.codeOnly);
       if ($("chkCodeOnly")) $("chkCodeOnly").textContent = state.codeOnly ? "✓" : "";
       renderTree();
-      toast(state.codeOnly ? "已聚焦：仅代码文件" : "已显示：全部文件");
+      toast(state.codeOnly ? t("toast.codeOnlyOn") : t("toast.codeOnlyOff"));
+    });
+
+    $("nextChange")?.addEventListener("click", () => gotoChange(1));
+    $("prevChange")?.addEventListener("click", () => gotoChange(-1));
+    $("foldToggle")?.addEventListener("click", toggleCollapse);
+
+    document.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.key === "n" || e.key === "N" || e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        gotoChange(1);
+      } else if (e.key === "p" || e.key === "P" || e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        gotoChange(-1);
+      } else if (e.key === "f" || e.key === "F") {
+        toggleCollapse();
+      }
     });
 
     // project field hover cursor
