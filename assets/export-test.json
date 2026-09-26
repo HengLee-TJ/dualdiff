@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-25T15:08:16.970Z",
+  "a": {
+    "root": "billing-service"
+  },
+  "b": {
+    "root": "billing-service-v2"
+  },
+  "summary": {
+    "total": 6,
+    "modified": 3,
+    "added": 1,
+    "deleted": 1,
+    "same": 1,
+    "binaryDiff": 0,
+    "linesChanged": 26,
+    "addedLines": 25,
+    "deletedLines": 15
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "status": "same",
+      "addedLines": 0,
+      "deletedLines": 0,
+      "binary": false,
+      "aSize": 50,
+      "bSize": 50
+    },
+    {
+      "path": "package.json",
+      "status": "modified",
+      "addedLines": 3,
+      "deletedLines": 2,
+      "binary": false,
+      "aSize": 74,
+      "bSize": 107
+    },
+    {
+      "path": "src/api/client.ts",
+      "status": "modified",
+      "addedLines": 9,
+      "deletedLines": 3,
+      "binary": false,
+      "aSize": 134,
+      "bSize": 389
+    },
+    {
+      "path": "src/config.ts",
+      "status": "modified",
+      "addedLines": 5,
+      "deletedLines": 4,
+      "binary": false,
+      "aSize": 143,
+      "bSize": 164
+    },
+    {
+      "path": "src/legacy/old-billing.ts",
+      "status": "deleted",
+      "addedLines": 0,
+      "deletedLines": 6,
+      "binary": false,
+      "aSize": 122,
+      "bSize": null
+    },
+    {
+      "path": "src/utils/format.ts",
+      "status": "added",
+      "addedLines": 8,
+      "deletedLines": 0,
+      "binary": false,
+      "aSize": null,
+      "bSize": 209
+    }
+  ]
+}
