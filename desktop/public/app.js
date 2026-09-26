@@ -1014,9 +1014,13 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     const labelEl = $(which === "a" ? "labelA" : "labelB");
     if (labelEl) labelEl.textContent = picked.name;
     toast(
-      `${which.toUpperCase()} 已加载：${picked.name}（${side.files.size} 文件）`
+      `${which.toUpperCase()} ${t("toast.loaded")}：${picked.name}（${side.files.size} files）`
     );
     updateReady();
+    // both projects ready → compare immediately
+    if (state.a.files.size && state.b.files.size) {
+      await runCompare();
+    }
   }
 
   function updateReady() {
@@ -1048,7 +1052,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     toast(`对比完成 · ${state.results.length} 文件`);
   }
 
-  function swapProjects() {
+  async function swapProjects() {
     const a = state.a;
     state.a = state.b;
     state.b = a;
@@ -1059,7 +1063,21 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       pA.textContent = pB.textContent;
       pB.textContent = t;
     }
-    toast("已交换 Project A / B");
+    // keep displayed project names in sync
+    const lA = $("labelA");
+    const lB = $("labelB");
+    if (lA && lB) {
+      const ln = lA.textContent;
+      lA.textContent = lB.textContent;
+      lB.textContent = ln;
+    }
+    toast(t("toast.swapped"));
+    // auto-compare after swap — no extra click
+    if (state.a.files.size && state.b.files.size) {
+      await runCompare();
+    } else {
+      updateReady();
+    }
   }
 
   // ---------- Demo data (offline preview when no FS access) ----------
