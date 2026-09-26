@@ -75,6 +75,8 @@
     codeOnly: true,
     typeFilter: "all",
     ignoreEncoding: true,
+    ignoreComment: false,
+    ignoreFormat: false,
     collapseContext: true,
     contextLines: 3,
     changeCursor: 0,
@@ -446,6 +448,10 @@
           const sim = similarity(d.aText || "", ad.bText || "");
           if (sim >= 0.45 || (d.aText || "").trim() === "" || (ad.bText || "").trim() === "") {
             const parts = wordDiffParts(d.aText || "", ad.bText || "");
+            const cls =
+              (window.DiffClass &&
+                window.DiffClass.classifyChange(d.aText || "", ad.bText || "", state.activePath)) ||
+              { kind: "code", reason: "logic" };
             out.push({
               type: "mod",
               a: d.a,
@@ -454,10 +460,14 @@
               bText: ad.bText,
               aParts: parts.a,
               bParts: parts.b,
+              kind: cls.kind,
+              reason: cls.reason,
             });
           } else {
-            out.push({ ...d, aParts: [{ t: d.aText || "", ch: true }] });
-            out.push({ ...ad, bParts: [{ t: ad.bText || "", ch: true }] });
+            const ca = (window.DiffClass && window.DiffClass.classifySoloLine(d.aText || "", state.activePath)) || { kind: "code" };
+            const cb = (window.DiffClass && window.DiffClass.classifySoloLine(ad.bText || "", state.activePath)) || { kind: "code" };
+            out.push({ ...d, aParts: [{ t: d.aText || "", ch: true }], kind: ca.kind, reason: ca.reason });
+            out.push({ ...ad, bParts: [{ t: ad.bText || "", ch: true }], kind: cb.kind, reason: cb.reason });
           }
         }
         for (let k = pairs; k < dels.length; k++) {
@@ -685,6 +695,44 @@
         } else {
           status = "modified";
           ops = markWordHL(diffLines(splitLines(a.text || ""), splitLines(b.text || "")));
+          // tag solo add/del + apply style ignore filters
+          if (window.DiffClass) {
+            for (const op of ops) {
+              if (op.type === "add" || op.type === "del") {
+                const c = window.DiffClass.classifySoloLine(op.aText ?? op.bText, path);
+                op.kind = c.kind;
+                op.reason = c.reason;
+              } else if (op.type === "mod" && !op.kind) {
+                const c = window.DiffClass.classifyChange(op.aText || "", op.bText || "", path);
+                op.kind = c.kind;
+                op.reason = c.reason;
+              }
+            }
+          }
+          if (state.ignoreComment || state.ignoreFormat) {
+            ops = ops.map((op) => {
+              if (op.kind === "style") {
+                const hide =
+                  (state.ignoreComment && op.reason === "comment") ||
+                  (state.ignoreFormat && op.reason === "format") ||
+                  (state.ignoreComment && state.ignoreFormat && op.reason !== "logic");
+                if (hide) {
+                  return {
+                    type: "ctx",
+                    a: op.a,
+                    b: op.b,
+                    aText: op.aText ?? op.bText,
+                    bText: op.bText ?? op.aText,
+                    aParts: [{ t: op.aText ?? op.bText ?? "", ch: false }],
+                    bParts: [{ t: op.bText ?? op.aText ?? "", ch: false }],
+                    kind: "style",
+                    ignored: true,
+                  };
+                }
+              }
+              return op;
+            });
+          }
           const st = statsFromOps(ops);
           add = st.add;
           del = st.del;
@@ -945,12 +993,13 @@
       const bEmpty = op.bText == null;
       let aCls;
       let bCls;
+      const isStyle = op.kind === "style";
       if (op.type === "mod") {
-        aCls = "mod";
-        bCls = "mod";
+        aCls = isStyle ? "mod style-change" : "mod";
+        bCls = isStyle ? "mod style-change" : "mod";
       } else {
-        aCls = aEmpty ? "blank" : op.type === "add" ? "blank" : op.type === "del" ? "del" : "ctx";
-        bCls = bEmpty ? "blank" : op.type === "del" ? "blank" : op.type === "add" ? "add" : "ctx";
+        aCls = aEmpty ? "blank" : op.type === "add" ? "blank" : op.type === "del" ? (isStyle ? "del style-change" : "del") : "ctx";
+        bCls = bEmpty ? "blank" : op.type === "del" ? "blank" : op.type === "add" ? (isStyle ? "add style-change" : "add") : "ctx";
       }
       left.push(
         `<div class="line ${aCls}${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${
@@ -1632,6 +1681,17 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       state.caseSensitive = !state.caseSensitive;
       $("caseSens")?.classList.toggle("on", state.caseSensitive);
       renderTree();
+    });
+
+    $("ignoreComment")?.addEventListener("click", () => {
+      state.ignoreComment = !state.ignoreComment;
+      $("ignoreComment")?.classList.toggle("on", state.ignoreComment);
+      if (state.a.files.size && state.b.files.size) runCompare();
+    });
+    $("ignoreFormat")?.addEventListener("click", () => {
+      state.ignoreFormat = !state.ignoreFormat;
+      $("ignoreFormat")?.classList.toggle("on", state.ignoreFormat);
+      if (state.a.files.size && state.b.files.size) runCompare();
     });
 
     $("codeOnly")?.addEventListener("click", () => {

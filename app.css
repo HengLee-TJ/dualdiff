@@ -428,6 +428,25 @@
 .line.change-start {
   box-shadow: inset 3px 0 0 var(--blue);
 }
+
+/* Two-color: style (comment/format) is weak gray-blue */
+.line.style-change.mod {
+  background: #eef2f6;
+}
+.line.style-change.add {
+  background: #f3f6f8;
+}
+.line.style-change.del {
+  background: #f3f6f8;
+}
+.line.style-change .hl {
+  background: #d5dee8;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.line.style-change .ln {
+  color: var(--ink-4);
+}
 .line.flash {
   animation: flashLine 0.9s ease;
 }
