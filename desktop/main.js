@@ -1,9 +1,33 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require(electron);
-const path = require(path);
-const fs = require(fs);
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
+const path = require("path");
+const fs = require("fs");
 const fsp = fs.promises;
 
-const DEFAULT_IGNORES = new Set([node_modules,.git,.svn,.hg,.idea,.vscode,dist,build,out,target,obj,bin,debug,release,x64,x86,__pycache__,.next,.nuxt,.cache,coverage,vendor,.DS_Store,Thumbs.db,
+const DEFAULT_IGNORES = new Set([
+  "node_modules",
+  ".git",
+  ".svn",
+  ".hg",
+  ".idea",
+  ".vscode",
+  "dist",
+  "build",
+  "out",
+  "target",
+  "obj",
+  "bin",
+  "debug",
+  "release",
+  "x64",
+  "x86",
+  "__pycache__",
+  ".next",
+  ".nuxt",
+  ".cache",
+  "coverage",
+  "vendor",
+  ".DS_Store",
+  "Thumbs.db",
 ]);
 
 function shouldIgnore(rel) {
@@ -11,7 +35,7 @@ function shouldIgnore(rel) {
   for (const seg of parts) {
     const s = seg.toLowerCase();
     if (DEFAULT_IGNORES.has(s)) return true;
-    if (s.endsWith(.log) || s.endsWith(.tmp) || s.endsWith(.user) || s.endsWith(.pdb)) return true;
+    if (s.endsWith(".log") || s.endsWith(".tmp") || s.endsWith(".user") || s.endsWith(".pdb")) return true;
   }
   return false;
 }
@@ -20,26 +44,26 @@ function shouldIgnore(rel) {
 function decodeBuffer(buf) {
   const u8 = buf;
   if (u8.length >= 3 && u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) {
-    return new TextDecoder(utf-8).decode(u8.subarray(3));
+    return new TextDecoder("utf-8").decode(u8.subarray(3));
   }
   if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) {
-    return new TextDecoder(utf-16le).decode(u8.subarray(2));
+    return new TextDecoder("utf-16le").decode(u8.subarray(2));
   }
   if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) {
-    return new TextDecoder(utf-16be).decode(u8.subarray(2));
+    return new TextDecoder("utf-16be").decode(u8.subarray(2));
   }
   try {
-    return new TextDecoder(utf-8, { fatal: true }).decode(u8);
+    return new TextDecoder("utf-8", { fatal: true }).decode(u8);
   } catch {
     /* not utf-8 */
   }
   try {
-    return new TextDecoder(gb18030).decode(u8);
+    return new TextDecoder("gb18030").decode(u8);
   } catch {
     try {
-      return new TextDecoder(gbk).decode(u8);
+      return new TextDecoder("gbk").decode(u8);
     } catch {
-      return new TextDecoder(utf-8, { fatal: false }).decode(u8);
+      return new TextDecoder("utf-8", { fatal: false }).decode(u8);
     }
   }
 }
@@ -56,7 +80,7 @@ async function scanDir(root) {
     for (const ent of entries) {
       const full = path.join(dir, ent.name);
       const rel = relBase ? path.posix.join(relBase, ent.name) : ent.name;
-      if (shouldIgnore(rel.split(/).join(path.sep))) continue;
+      if (shouldIgnore(rel.split("/").join(path.sep))) continue;
       if (ent.isDirectory()) {
         await walk(full, rel);
       } else if (ent.isFile()) {
@@ -75,7 +99,7 @@ async function scanDir(root) {
       }
     }
   }
-  await walk(root,);
+  await walk(root, "");
   return [...files.values()];
 }
 
@@ -85,63 +109,63 @@ function createWindow() {
     height: 920,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor:#ebeff4,
-    title:DualDiff,
+    backgroundColor: "#ebeff4",
+    title: "DualDiff",
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname,preload.js),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
   });
 
-  win.loadFile(path.join(__dirname,public,index.html));
+  win.loadFile(path.join(__dirname, "public", "index.html"));
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.endsWith(prd.html) || url.includes(prd.html)) {
-      win.webContents.send(noop);
-      return { action:deny };
+    if (url.endsWith("prd.html") || url.includes("prd.html")) {
+      win.webContents.send("noop");
+      return { action: "deny" };
     }
     shell.openExternal(url);
-    return { action:deny };
+    return { action: "deny" };
   });
 
   const menu = Menu.buildFromTemplate([
     {
-      label:文件,
+      label: "文件",
       submenu: [
         {
-          label:退出,
-          accelerator:CmdOrCtrl+Q,
+          label: "退出",
+          accelerator: "CmdOrCtrl+Q",
           click: () => app.quit(),
         },
       ],
     },
     {
-      label:视图,
+      label: "视图",
       submenu: [
-        { role:reload },
-        { role:toggleDevTools },
-        { type:separator },
-        { role:resetZoom },
-        { role:zoomIn },
-        { role:zoomOut },
-        { type:separator },
-        { role:togglefullscreen },
+        { role: "reload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
       ],
     },
     {
-      label:帮助,
+      label: "帮助",
       submenu: [
         {
-          label:关于 DualDiff,
+          label: "关于 DualDiff",
           click: () => {
             dialog.showMessageBox(win, {
-              type:info,
-              title:DualDiff,
-              message:DualDiff 1.0.0,
-              detail:双工程代码差异对比工具\nLocal compare · No upload,
+              type: "info",
+              title: "DualDiff",
+              message: "DualDiff 1.0.0",
+              detail: "双工程代码差异对比工具\nLocal compare · No upload",
             });
           },
         },
@@ -152,11 +176,11 @@ function createWindow() {
   return win;
 }
 
-ipcMain.handle(dualdiff:pickDirectory, async (event, side) => {
+ipcMain.handle("dualdiff:pickDirectory", async (event, side) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const ret = await dialog.showOpenDialog(win, {
-    title: side ===b ?Select Project B folder :Select Project A folder,
-    properties: [openDirectory],
+    title: side === "b" ? "Select Project B folder" : "Select Project A folder",
+    properties: ["openDirectory"],
   });
   if (ret.canceled || !ret.filePaths.length) return null;
   const root = ret.filePaths[0];
@@ -168,7 +192,7 @@ ipcMain.handle(dualdiff:pickDirectory, async (event, side) => {
   };
 });
 
-ipcMain.handle(dualdiff:readFiles, async (event, paths) => {
+ipcMain.handle("dualdiff:readFiles", async (event, paths) => {
   const out = {};
   for (const p of paths || []) {
     try {
@@ -207,55 +231,55 @@ ipcMain.handle(dualdiff:readFiles, async (event, paths) => {
   return out;
 });
 
-ipcMain.handle(dualdiff:saveText, async (event, { defaultName, content, filters }) => {
+ipcMain.handle("dualdiff:saveText", async (event, { defaultName, content, filters }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const ret = await dialog.showSaveDialog(win, {
     defaultPath: defaultName,
-    filters: filters || [{ name:All, extensions: [*] }],
+    filters: filters || [{ name: "All", extensions: ["*"] }],
   });
   if (ret.canceled || !ret.filePath) return null;
-  await fsp.writeFile(ret.filePath, content,utf8);
+  await fsp.writeFile(ret.filePath, content, "utf8");
   return ret.filePath;
 });
 
-ipcMain.handle(dualdiff:openExternal, async (event, target) => {
+ipcMain.handle("dualdiff:openExternal", async (event, target) => {
   try {
     if (!target) return false;
-    if (String(target).endsWith(prd.html)) {
+    if (String(target).endsWith("prd.html")) {
       const win = BrowserWindow.fromWebContents(event.sender);
       const prdWin = new BrowserWindow({
         width: 1100,
         height: 800,
-        title:DualDiff PRD,
+        title: "DualDiff PRD",
         autoHideMenuBar: true,
-        backgroundColor:#ffffff,
+        backgroundColor: "#ffffff",
         webPreferences: {
           contextIsolation: true,
           nodeIntegration: false,
         },
       });
-      await prdWin.loadFile(path.join(__dirname,public,prd.html));
+      await prdWin.loadFile(path.join(__dirname, "public", "prd.html"));
       return true;
     }
     if (/^https?:/i.test(target)) {
       await shell.openExternal(target);
       return true;
     }
-    await shell.openPath(path.resolve(__dirname,public, target));
+    await shell.openPath(path.resolve(__dirname, "public", target));
     return true;
   } catch (err) {
-    console.error(openExternal failed, err);
+    console.error("openExternal failed", err);
     return false;
   }
 });
 
 app.whenReady().then(() => {
   createWindow();
-  app.on(activate, () => {
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-app.on(window-all-closed, () => {
-  if (process.platform !==darwin) app.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
