@@ -202,10 +202,13 @@ button { cursor: pointer; border: none; background: none; }
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 300px;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
-  height: 0; /* force children to respect flex */
+  height: 0;
+}
+.workspace.show-stats {
+  grid-template-columns: 280px minmax(0, 1fr) 280px;
 }
 
 .panel {

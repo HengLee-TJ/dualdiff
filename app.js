@@ -1569,23 +1569,27 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 
     $("hideUnchanged")?.addEventListener("click", () => {
       state.hideUnchanged = !state.hideUnchanged;
-      $("chkUnchanged")?.classList.toggle("on", state.hideUnchanged);
-      if ($("chkUnchanged")) $("chkUnchanged").textContent = state.hideUnchanged ? "✓" : "";
+      $("hideUnchanged")?.classList.toggle("on", state.hideUnchanged);
       renderTree();
     });
     $("caseSens")?.addEventListener("click", () => {
       state.caseSensitive = !state.caseSensitive;
-      $("chkCase")?.classList.toggle("on", state.caseSensitive);
-      if ($("chkCase")) $("chkCase").textContent = state.caseSensitive ? "✓" : "";
+      $("caseSens")?.classList.toggle("on", state.caseSensitive);
       renderTree();
     });
 
     $("codeOnly")?.addEventListener("click", () => {
       state.codeOnly = !state.codeOnly;
-      $("chkCodeOnly")?.classList.toggle("on", state.codeOnly);
-      if ($("chkCodeOnly")) $("chkCodeOnly").textContent = state.codeOnly ? "✓" : "";
+      $("codeOnly")?.classList.toggle("on", state.codeOnly);
       renderTree();
       toast(state.codeOnly ? t("toast.codeOnlyOn") : t("toast.codeOnlyOff"));
+    });
+
+    $("statsToggle")?.addEventListener("click", () => {
+      const ws = document.querySelector(".workspace");
+      if (!ws) return;
+      ws.classList.toggle("show-stats");
+      $("statsToggle")?.classList.toggle("on", ws.classList.contains("show-stats"));
     });
 
     $("nextChange")?.addEventListener("click", () => gotoChange(1));
