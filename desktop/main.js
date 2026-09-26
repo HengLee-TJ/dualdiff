@@ -81,8 +81,8 @@ function createWindow() {
     height: 920,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: "#f3f5f9",
-    title: "DualDiff — 双工程代码差异对比",
+    backgroundColor: "#ebeff4",
+    title: "DualDiff",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -94,8 +94,11 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, "public", "index.html"));
 
-  // open external links in system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.endsWith("prd.html") || url.includes("prd.html")) {
+      win.webContents.send("noop");
+      return { action: "deny" };
+    }
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -132,9 +135,9 @@ function createWindow() {
           click: () => {
             dialog.showMessageBox(win, {
               type: "info",
-              title: "关于 DualDiff",
+              title: "DualDiff",
               message: "DualDiff 1.0.0",
-              detail: "双工程代码差异对比工具\n本地运行 · 不上传代码",
+              detail: "双工程代码差异对比工具\nLocal compare · No upload",
             });
           },
         },
@@ -148,7 +151,7 @@ function createWindow() {
 ipcMain.handle("dualdiff:pickDirectory", async (event, side) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const ret = await dialog.showOpenDialog(win, {
-    title: side === "b" ? "选择工程 B 目录" : "选择工程 A 目录",
+    title: side === "b" ? "Select Project B folder" : "Select Project A folder",
     properties: ["openDirectory"],
   });
   if (ret.canceled || !ret.filePaths.length) return null;
@@ -171,7 +174,6 @@ ipcMain.handle("dualdiff:readFiles", async (event, paths) => {
         continue;
       }
       const buf = await fsp.readFile(p);
-      // binary heuristic
       const n = Math.min(buf.length, 8000);
       let suspicious = 0;
       let isBin = false;
@@ -209,6 +211,37 @@ ipcMain.handle("dualdiff:saveText", async (event, { defaultName, content, filter
   if (ret.canceled || !ret.filePath) return null;
   await fsp.writeFile(ret.filePath, content, "utf8");
   return ret.filePath;
+});
+
+ipcMain.handle("dualdiff:openExternal", async (event, target) => {
+  try {
+    if (!target) return false;
+    if (String(target).endsWith("prd.html")) {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const prdWin = new BrowserWindow({
+        width: 1100,
+        height: 800,
+        title: "DualDiff PRD",
+        autoHideMenuBar: true,
+        backgroundColor: "#ffffff",
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+        },
+      });
+      await prdWin.loadFile(path.join(__dirname, "public", "prd.html"));
+      return true;
+    }
+    if (/^https?:/i.test(target)) {
+      await shell.openExternal(target);
+      return true;
+    }
+    await shell.openPath(path.resolve(__dirname, "public", target));
+    return true;
+  } catch (err) {
+    console.error("openExternal failed", err);
+    return false;
+  }
 });
 
 app.whenReady().then(() => {

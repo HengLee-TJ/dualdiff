@@ -1,0 +1,1254 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DualDiff — 双工程代码差异对比工具 · PRD / 技术方案 / UI 规范</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" href="#top">
+      <span class="brand-mark">DD</span>
+      <span>DualDiff</span>
+      <span class="brand-sub">双工程代码差异对比工具</span>
+    </a>
+    <div class="topbar-meta">
+      <span class="chip">PRD v1.0</span>
+      <a class="chip blue" href="dualdiff.html" style="text-decoration:none;">打开 UI 设计原型 →</a>
+    </div>
+  </header>
+
+  <div class="layout" id="top">
+    <aside class="sidebar">
+      <h2>目录</h2>
+      <ul class="toc" id="toc">
+        <li><a href="#assumptions">0. 假设与前提</a></li>
+        <li><a href="#positioning">1. 产品定位</a></li>
+        <li><a href="#requirements">2. 需求分析</a></li>
+        <li><a class="l2" href="#user-stories">用户故事</a></li>
+        <li><a class="l2" href="#core-flow">核心流程</a></li>
+        <li><a class="l2" href="#edge-cases">边界与异常</a></li>
+        <li><a href="#features">3. 核心功能设计</a></li>
+        <li><a href="#nfr">4. 非功能需求</a></li>
+        <li><a href="#tech">5. 技术方案</a></li>
+        <li><a class="l2" href="#stack">技术选型</a></li>
+        <li><a class="l2" href="#algorithms">算法与实现</a></li>
+        <li><a class="l2" href="#architecture">架构与接口</a></li>
+        <li><a href="#uiux">6. UI / UX 设计</a></li>
+        <li><a href="#plan">7. 实施计划</a></li>
+        <li><a href="#appendix">附录 · 验收与目录</a></li>
+      </ul>
+    </aside>
+
+    <main class="main">
+      <div class="hero">
+        <div class="hero-kicker">Product Requirements Document · Technical Blueprint · UX Spec</div>
+        <h1>双工程代码差异对比工具<br/>完整需求分析与技术方案</h1>
+        <p class="hero-lead">
+          本方案面向「两个独立工程 / 两份目录副本 / 两套代码基线」的对比场景，覆盖产品定位、P0–P2 需求、核心 diff 管线、轻量跨平台技术栈、Harness 风格 UI 规范与可执行实施计划，可直接用于产品设计、技术选型与开发排期。
+        </p>
+        <div class="hero-grid">
+          <div class="metric"><div class="k">产品名建议</div><div class="v">DualDiff <span>· CodeAlign</span></div></div>
+          <div class="metric"><div class="k">安装包体积目标</div><div class="v"><span>≤ 30 MB</span></div></div>
+          <div class="metric"><div class="k">核心技术栈</div><div class="v">Tauri + <span>Rust</span></div></div>
+          <div class="metric"><div class="k">交付形态</div><div class="v">GUI + <span>CLI</span></div></div>
+        </div>
+      </div>
+
+      <!-- 0 -->
+      <section class="doc" id="assumptions">
+        <h2><span class="sec-num">0</span>假设与前提</h2>
+        <p class="sec-lead">信息不足处先固化假设，避免方案空转；若假设被推翻，只需替换对应模块，不影响整体架构。</p>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>编号</th><th>假设</th><th>若不成立的影响</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>A1</td>
+                <td>对比对象是两个本地目录树（可含 <code class="inline">.git</code>，但不依赖同一仓库）。</td>
+                <td>若需远程仓库拉取，增加网络/认证模块（P1）。</td>
+              </tr>
+              <tr>
+                <td>A2</td>
+                <td>主要服务源代码与配置文本，二进制只做「有无差异」识别，不做语义 diff。</td>
+                <td>图片/资源对比可作为 P2 插件。</td>
+              </tr>
+              <tr>
+                <td>A3</td>
+                <td>单机本地运行，数据不出本机；目标用户可接受 CLI 与桌面 GUI 双形态。</td>
+                <td>若必须纯 Web，需服务端扫描与权限模型，体积与复杂度上升。</td>
+              </tr>
+              <tr>
+                <td>A4</td>
+                <td>典型工程规模：≤ 50k 文件 / ≤ 2 GB 文本；更大工程可按需加载。</td>
+                <td>超大规模需索引缓存与后台任务队列（P2）。</td>
+              </tr>
+              <tr>
+                <td>A5</td>
+                <td>UI 采用白底 Harness 风格：浅灰分区、蓝色强调、圆角卡片、高信息密度。</td>
+                <td>视觉系统独立可换肤，不阻塞功能。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 1 -->
+      <section class="doc" id="positioning">
+        <h2><span class="sec-num">1</span>产品定位</h2>
+        <p class="sec-lead">把「两个独立工程」的结构级与内容级差异，变成一次可扫描、可阅读、可导出的工程对比任务。</p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>一句话价值主张</h3>
+            <p><strong>一次选择两个工程，自动生成可读、可筛、可导出的全量代码差异报告与逐文件 diff 视图。</strong></p>
+            <p style="color:var(--ink-3);font-size:13.5px;margin:0;">本地运行 · 轻量安装 · 不依赖 Git 同源历史</p>
+          </div>
+          <div class="card">
+            <h3>目标用户</h3>
+            <ul>
+              <li>需要做 <strong>版本基线对齐 / 迁移核对</strong> 的研发工程师</li>
+              <li>交付前做 <strong>两套副本一致性检查</strong> 的实施/运维</li>
+              <li>做 <strong>开源分叉、客户定制版</strong> 差异审计的架构师</li>
+              <li>希望用 CLI 批量出报告的 CI/脚本作者</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>核心使用场景</h3>
+        <div class="grid-3">
+          <div class="card tinted">
+            <h4>迁移核对</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">老工程 → 新工程重构后，确认哪些文件被改、哪些被删、哪些新增，输出 Markdown 报告给评审。</p>
+          </div>
+          <div class="card tinted">
+            <h4>定制版审计</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">官方版 vs 客户定制版，快速定位改动文件，过滤 node_modules / build，生成 HTML 报告。</p>
+          </div>
+          <div class="card tinted">
+            <h4>交付一致性</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">现场部署目录与签核目录对比，识别缺文件与内容漂移，导出 CSV 作为验收附件。</p>
+          </div>
+        </div>
+
+        <h3>与现有工具差异</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>能力</th>
+                <th>Git diff</th>
+                <th>Beyond Compare / WinMerge / Meld</th>
+                <th>DualDiff（本产品）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>对比对象</td>
+                <td>同仓库提交 / 分支</td>
+                <td>任意两目录/文件</td>
+                <td><strong>任意两工程树 + 可选 Git 工作区</strong></td>
+              </tr>
+              <tr>
+                <td>工程级摘要</td>
+                <td>弱（需脚本）</td>
+                <td>中（会话/报告）</td>
+                <td><strong>强：统计 + 过滤 + 多格式报告一体</strong></td>
+              </tr>
+              <tr>
+                <td>忽略规则</td>
+                <td>.gitignore</td>
+                <td>可配置过滤</td>
+                <td><strong>.gitignore + 自定义 + 语义预设（node_modules 等）</strong></td>
+              </tr>
+              <tr>
+                <td>重命名检测</td>
+                <td>有（相似度）</td>
+                <td>部分</td>
+                <td><strong>内容哈希 + 相似度启发式，默认开启</strong></td>
+              </tr>
+              <tr>
+                <td>导出</td>
+                <td>patch</td>
+                <td>报告/会话</td>
+                <td><strong>patch / HTML / JSON / CSV / Markdown</strong></td>
+              </tr>
+              <tr>
+                <td>体积与部署</td>
+                <td>随 Git</td>
+                <td>较重 / 授权</td>
+                <td><strong>≤ 30 MB，本地免服务，GUI+CLI</strong></td>
+              </tr>
+              <tr>
+                <td>隐私</td>
+                <td>本地</td>
+                <td>本地</td>
+                <td><strong>本地，零上传</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>产品边界：</strong>不做 Git 托管、不做在线协作、不做代码托管平台同步。它解决的是「两个独立工程如何高效对齐认知」，而不是「版本管理」。
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="doc" id="requirements">
+        <h2><span class="sec-num">2</span>需求分析</h2>
+        <p class="sec-lead">按 P0（必须）、P1（应有）、P2（可选）划分；P0 构成 MVP，可在 6–8 周内交付可用版本。</p>
+
+        <h3>功能需求优先级</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>功能</th>
+                <th>优先级</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>F01</td>
+                <td>选择两个本地目录 / 工程根</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>拖拽 + 文件选择器；记住最近工程对</td>
+              </tr>
+              <tr>
+                <td>F02</td>
+                <td>扫描文件树并建立映射</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>相对路径精确匹配；忽略规则生效</td>
+              </tr>
+              <tr>
+                <td>F03</td>
+                <td>状态分类：新增 / 删除 / 修改 / 一致 / 二进制差</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>颜色与图标一致编码</td>
+              </tr>
+              <tr>
+                <td>F04</td>
+                <td>逐文件 diff 视图（并排 + 统一）</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>行级高亮、行号、折叠上下文</td>
+              </tr>
+              <tr>
+                <td>F05</td>
+                <td>忽略规则：.gitignore / 自定义 / 预设排除</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>默认排除 node_modules、dist、build、.git 等</td>
+              </tr>
+              <tr>
+                <td>F06</td>
+                <td>工程级统计摘要</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>文件数、变更行数、二进制差异数</td>
+              </tr>
+              <tr>
+                <td>F07</td>
+                <td>导出 unified diff / .patch</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>可按过滤结果导出</td>
+              </tr>
+              <tr>
+                <td>F08</td>
+                <td>导出 JSON 对比报告</td>
+                <td><span class="badge p0">P0</span></td>
+                <td>供脚本/CI 消费的结构化结果</td>
+              </tr>
+              <tr>
+                <td>F09</td>
+                <td>文件树过滤 / 搜索 / 跳转</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>按状态、路径、内容关键词过滤</td>
+              </tr>
+              <tr>
+                <td>F10</td>
+                <td>重命名检测</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>哈希相同 + 内容相似度启发式</td>
+              </tr>
+              <tr>
+                <td>F11</td>
+                <td>导出 HTML / Markdown / CSV 报告</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>可分享的静态报告，不依赖本机安装</td>
+              </tr>
+              <tr>
+                <td>F12</td>
+                <td>CLI 模式（无 GUI）</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>复用核心库，支持 CI</td>
+              </tr>
+              <tr>
+                <td>F13</td>
+                <td>复制 diff 片段 / 导出单文件</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>一键复制 unified 片段</td>
+              </tr>
+              <tr>
+                <td>F14</td>
+                <td>换行符 / 编码可配置归一</td>
+                <td><span class="badge p1">P1</span></td>
+                <td>CRLF/LF、UTF-8/GBK 策略</td>
+              </tr>
+              <tr>
+                <td>F15</td>
+                <td>Git 仓库感知（.git 状态、工作区）</td>
+                <td><span class="badge p2">P2</span></td>
+                <td>可选读取 git 元数据辅助识别</td>
+              </tr>
+              <tr>
+                <td>F16</td>
+                <td>目录级对比合并视图</td>
+                <td><span class="badge p2">P2</span></td>
+                <td>多文件聚合成一次阅读流</td>
+              </tr>
+              <tr>
+                <td>F17</td>
+                <td>插件式二进制/资源对比</td>
+                <td><span class="badge p2">P2</span></td>
+                <td>图片 hash、结构化 JSON 对比</td>
+              </tr>
+              <tr>
+                <td>F18</td>
+                <td>会话保存 / 恢复</td>
+                <td><span class="badge p2">P2</span></td>
+                <td>保存工程对与过滤器</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="user-stories">用户故事</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>US-01 迁移工程师</h4>
+            <p>作为迁移工程师，我想<strong>一次选中两个工程目录</strong>，立刻看到改了哪些文件，以便决定评审范围。</p>
+            <p class="pill-row" style="margin:0;"><span class="badge p0">P0</span><span class="badge muted">F01 F02 F06</span></p>
+          </div>
+          <div class="card">
+            <h4>US-02 代码审计</h4>
+            <p>作为审计者，我想<strong>按相对路径匹配文件</strong>，并识别「改名未改内容」，避免误报大量增删。</p>
+            <p class="pill-row" style="margin:0;"><span class="badge p1">P1</span><span class="badge muted">F03 F10</span></p>
+          </div>
+          <div class="card">
+            <h4>US-03 交付验收</h4>
+            <p>作为交付负责人，我想导出 <strong>HTML/CSV 报告</strong>发给客户或归档，证明两套环境一致或列出差异。</p>
+            <p class="pill-row" style="margin:0;"><span class="badge p1">P1</span><span class="badge muted">F07 F08 F11</span></p>
+          </div>
+          <div class="card">
+            <h4>US-04 CI 脚本</h4>
+            <p>作为 CI 作者，我想用 <strong>CLI</strong> 在流水线里对比目录并返回非零退出码，当差异超出阈值时失败。</p>
+            <p class="pill-row" style="margin:0;"><span class="badge p1">P1</span><span class="badge muted">F12 F08</span></p>
+          </div>
+        </div>
+
+        <h3 id="core-flow">核心流程图</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 920 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="核心对比流程">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#2563eb"/>
+              </marker>
+            </defs>
+            <rect x="30" y="30" width="160" height="56" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="110" y="63" text-anchor="middle" font-size="13" fill="#1e3a8a" font-family="Segoe UI, PingFang SC, sans-serif">选择工程 A / B</text>
+
+            <rect x="260" y="30" width="170" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+            <text x="345" y="54" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">应用忽略规则</text>
+            <text x="345" y="72" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">.gitignore / 预设 / 自定义</text>
+
+            <rect x="500" y="30" width="170" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+            <text x="585" y="54" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">并行遍历 + 哈希</text>
+            <text x="585" y="72" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">size / blake3 预筛</text>
+
+            <rect x="740" y="30" width="150" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+            <text x="815" y="54" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">建立文件映射</text>
+            <text x="815" y="72" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">相对路径精确匹配</text>
+
+            <rect x="260" y="140" width="170" height="56" rx="10" fill="#f6f8fb" stroke="#cbd5e1" stroke-width="1.5"/>
+            <text x="345" y="164" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">状态分类</text>
+            <text x="345" y="182" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">A? M D = bin-diff</text>
+
+            <rect x="500" y="140" width="170" height="56" rx="10" fill="#f6f8fb" stroke="#cbd5e1" stroke-width="1.5"/>
+            <text x="585" y="164" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">按需文本 diff</text>
+            <text x="585" y="182" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">similar / imara-diff</text>
+
+            <rect x="740" y="140" width="150" height="56" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+            <text x="815" y="164" text-anchor="middle" font-size="13" fill="#065f46" font-family="Segoe UI, PingFang SC, sans-serif">摘要 + 文件树</text>
+            <text x="815" y="182" text-anchor="middle" font-size="11" fill="#047857" font-family="Segoe UI, PingFang SC, sans-serif">过滤 / 搜索 / 统计</text>
+
+            <rect x="260" y="250" width="170" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+            <text x="345" y="274" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">单文件 Diff 视图</text>
+            <text x="345" y="292" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">并排 / 统一 / 行内高亮</text>
+
+            <rect x="500" y="250" width="170" height="56" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+            <text x="585" y="274" text-anchor="middle" font-size="13" fill="#0f172a" font-family="Segoe UI, PingFang SC, sans-serif">导出</text>
+            <text x="585" y="292" text-anchor="middle" font-size="11" fill="#64748b" font-family="Segoe UI, PingFang SC, sans-serif">patch · HTML · JSON · CSV · MD</text>
+
+            <rect x="740" y="250" width="150" height="56" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+            <text x="815" y="283" text-anchor="middle" font-size="13" fill="#1e3a8a" font-family="Segoe UI, PingFang SC, sans-serif">交付报告</text>
+
+            <line x1="190" y1="58" x2="255" y2="58" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="430" y1="58" x2="495" y2="58" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="670" y1="58" x2="735" y2="58" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="815" y1="90" x2="815" y2="135" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="735" y1="168" x2="675" y2="168" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="495" y1="168" x2="435" y2="168" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="345" y1="196" x2="345" y2="245" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="430" y1="278" x2="495" y2="278" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+            <line x1="670" y1="278" x2="735" y2="278" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow)"/>
+          </svg>
+          <div class="diagram-cap">图 1 · 双工程对比核心管线（扫描 → 分类 → 展示 → 导出）</div>
+        </div>
+
+        <h3 id="edge-cases">边界条件与异常场景</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>场景</th><th>行为约定</th><th>优先级</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>目录不存在 / 无权限</td>
+                <td>明确错误卡片，指出路径；不崩溃，可重新选择</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td>路径包含空格 / 非 ASCII / 超长</td>
+                <td>全路径 UTF-8 处理；展示时可截断，导出保留完整路径</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td>符号链接 / 循环链接</td>
+                <td>默认不跟随；可配置跟随并检测环，环内跳过并警告</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td>二进制文件</td>
+                <td>魔数/不可打印字节检测；仅比 size+hash，不做行 diff</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td>超大文件（&gt; 5 MB 文本）</td>
+                <td>默认跳过内容 diff，标记 large；可强制打开并虚拟滚动</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+              <tr>
+                <td>编码差异（UTF-8 / GBK / UTF-16）</td>
+                <td>检测 BOM/启发式解码；失败则按字节比较并标记 encoding</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+              <tr>
+                <td>换行符 CRLF vs LF</td>
+                <td>默认可忽略（归一后比较）；导出 patch 时保留原样策略可配置</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+              <tr>
+                <td>仅时间戳/权限差异</td>
+                <td>默认不算内容变更；可在「元数据模式」显示 mode 差</td>
+                <td><span class="badge p2">P2</span></td>
+              </tr>
+              <tr>
+                <td>一侧空目录 / 空工程</td>
+                <td>全部文件标为新增/删除，摘要仍可用</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td>扫描中拔盘 / 路径消失</td>
+                <td>任务失败可见，已完成结果保留，可重试</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 3 -->
+      <section class="doc" id="features">
+        <h2><span class="sec-num">3</span>核心功能设计</h2>
+        <p class="sec-lead">围绕「选对工程 → 匹配文件 → 高效 diff → 导出结果」四步展开，每一步都有明确的规则与默认值。</p>
+
+        <h3>3.1 选择两个工程</h3>
+        <div class="card">
+          <ul>
+            <li>支持文件夹选择器、拖拽目录、粘贴路径；可选用 Git 工作区根目录（含 <code class="inline">.git</code>）。</li>
+            <li>工程 A（左）/ 工程 B（右）语义固定：<strong>A 为基准，B 为对照</strong>；「新增」= 仅在 B，「删除」= 仅在 A。</li>
+            <li>记录最近 10 组工程对（本地配置，不上传）。</li>
+            <li>交换 A/B 一键按钮；对比前校验：路径存在、可读、非同一路径。</li>
+          </ul>
+        </div>
+
+        <h3>3.2 文件扫描与映射</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>映射策略（默认）</h4>
+            <ol>
+              <li>以<strong>相对工程根的 POSIX 路径</strong>作为键精确匹配。</li>
+              <li>大小 + 快速哈希预筛：相同 size/hash → 一致，跳过内容 diff。</li>
+              <li>其余文件进入分类与按需内容 diff。</li>
+              <li>P1 开启重命名：未匹配且哈希相同 → Rename；相似度 &gt; 阈值 → Probable Rename。</li>
+            </ol>
+          </div>
+          <div class="card">
+            <h4>状态枚举</h4>
+            <div class="pill-row">
+              <span class="badge ok">Same</span>
+              <span class="badge p1">Modified</span>
+              <span class="badge p0">Deleted</span>
+              <span class="badge p2">Added</span>
+              <span class="badge muted">Binary</span>
+              <span class="badge muted">Renamed</span>
+              <span class="badge muted">Ignored</span>
+              <span class="badge muted">Large</span>
+            </div>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">
+              UI 图标与颜色全局一致：绿=同/新增可选、琥珀=改、红=删、蓝=新增、灰=二进制/忽略。
+            </p>
+          </div>
+        </div>
+
+        <h3>3.3 忽略规则</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>来源</th><th>行为</th><th>默认</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>内置预设</td>
+                <td>排除依赖与产物目录</td>
+                <td><code class="inline">node_modules, dist, build, target, .git, .svn, .idea, .vscode, __pycache__, vendor, .next, .nuxt, coverage, .cache</code></td>
+              </tr>
+              <tr>
+                <td>.gitignore</td>
+                <td>若工程根存在则加载（可关）</td>
+                <td>开启</td>
+              </tr>
+              <tr>
+                <td>自定义 Glob</td>
+                <td>会话级 / 项目级 ignore 文件</td>
+                <td>空</td>
+              </tr>
+              <tr>
+                <td>大小阈值</td>
+                <td>超过阈值不进入内容 diff</td>
+                <td>5 MB</td>
+              </tr>
+            </tbody>
+          </table>
+          <pre>!docs/**
+*.log
+minified/**</pre>
+        </div>
+
+        <h3>3.4 逐文件 Diff</h3>
+        <div class="card">
+          <h4>视图模式</h4>
+          <ul>
+            <li><strong>并排（Side-by-Side）</strong>：适合窄改动；支持同步滚动、对齐空白。</li>
+            <li><strong>统一（Unified）</strong>：适合生成 patch 阅读与复制。</li>
+            <li><strong>行内高亮</strong>：字符级/词级高亮修改片段（在行级 diff 基础上叠加）。</li>
+            <li>折叠未变更上下文（默认 ±3 行，可展开）。</li>
+            <li>支持「只看变更行」、复制行、复制 hunk、跳转下一个变更（N/P 或工具栏）。</li>
+          </ul>
+          <div class="diff-demo">
+            <div class="diff-pane">
+              <div class="head">A · src/config.ts</div>
+              <div class="body">
+                <div class="line ctx"><span class="n">12</span><span>export const config = {</span></div>
+                <div class="line del"><span class="n">13</span><span>  timeout: 30,</span></div>
+                <div class="line del"><span class="n">14</span><span>  retries: 1,</span></div>
+                <div class="line ctx"><span class="n">15</span><span>  host: "local",</span></div>
+                <div class="line ctx"><span class="n">16</span><span>};</span></div>
+              </div>
+            </div>
+            <div class="diff-pane">
+              <div class="head">B · src/config.ts</div>
+              <div class="body">
+                <div class="line ctx"><span class="n">12</span><span>export const config = {</span></div>
+                <div class="line add"><span class="n">13</span><span>  timeout: 10,</span></div>
+                <div class="line add"><span class="n">14</span><span>  retries: 3,</span></div>
+                <div class="line ctx"><span class="n">15</span><span>  host: "local",</span></div>
+                <div class="line ctx"><span class="n">16</span><span>};</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h3>3.5 整体结果与统计</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>摘要指标</h4>
+            <ul style="margin:0;">
+              <li>新增文件数 / 删除文件数 / 修改文件数 / 一致文件数</li>
+              <li>二进制差异数 / 重命名对数</li>
+              <li>总变更行数（+add / −del）</li>
+              <li>变更文件按目录聚合 Top N</li>
+              <li>扫描耗时、跳过忽略数、大文件数</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>过滤与搜索</h4>
+            <ul style="margin:0;">
+              <li>按状态多选过滤（仅改 / 仅增删…）</li>
+              <li>路径/文件名模糊搜索</li>
+              <li>变更行数范围过滤（&gt; N 行优先看）</li>
+              <li>正则内容搜索（P1，结果跳转到文件）</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>3.6 导出能力</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>格式</th><th>内容</th><th>适用</th><th>优先级</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code class="inline">.patch / unified diff</code></td>
+                <td>符合 git apply 的 diff 文本；可选相对路径前缀</td>
+                <td>补丁、代码评审</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td><code class="inline">JSON</code></td>
+                <td>文件清单、状态、统计、可选 diff hunks</td>
+                <td>脚本 / CI / 二次分析</td>
+                <td><span class="badge p0">P0</span></td>
+              </tr>
+              <tr>
+                <td><code class="inline">HTML</code></td>
+                <td>自包含静态报告（内联 CSS），含摘要与逐文件 diff</td>
+                <td>分享、归档</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+              <tr>
+                <td><code class="inline">Markdown</code></td>
+                <td>表格摘要 + 关键文件 diff 片段</td>
+                <td>PR 描述、Wiki</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+              <tr>
+                <td><code class="inline">CSV</code></td>
+                <td>一行一文件：path,status,+,−,size…</td>
+                <td>Excel / 验收清单</td>
+                <td><span class="badge p1">P1</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>3.7 CLI（P1）</h3>
+        <pre>dualdiff compare ./projA ./projB \
+  --ignore node_modules,dist \
+  --format json,html \
+  --out ./reports \
+  --fail-on changed \
+  --threshold 100</pre>
+      </section>
+
+      <!-- 4 -->
+      <section class="doc" id="nfr">
+        <h2><span class="sec-num">4</span>非功能需求</h2>
+        <p class="sec-lead">轻量、跨平台、本地隐私、大工程可用，是选择技术方案的硬约束。</p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>体积与安装</h3>
+            <ul>
+              <li>安装包目标：<strong>≤ 30 MB</strong>（理想 10–20 MB）</li>
+              <li>免管理员权限安装（Windows NSIS / macOS DMG / Linux AppImage）</li>
+              <li>不捆绑浏览器内核（避免 Electron 100MB+）</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>性能目标</h3>
+            <ul>
+              <li>1 万文件扫描 + 哈希预筛：&lt; 3 s（SSD，缓存冷）</li>
+              <li>5 万文件工程：&lt; 12 s 完成摘要；UI 可中途看进度</li>
+              <li>单文件 diff 首屏：&lt; 200 ms（普通源文件）</li>
+              <li>大文件：虚拟滚动，DOM 不随行数线性膨胀</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>平台与兼容</h3>
+            <ul>
+              <li>Windows 10/11、macOS 12+、主流 Linux x64</li>
+              <li>深浅色：默认浅色；P2 跟随系统</li>
+              <li>高 DPI / 缩放 100–200%</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>隐私与安全</h3>
+            <ul>
+              <li><strong>100% 本地处理，不上传代码</strong></li>
+              <li>遥测默认关闭；若开启仅匿名崩溃栈</li>
+              <li>导出报告路径由用户显式选择</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>稳定性与可维护性</h3>
+          <table>
+            <thead>
+              <tr><th>维度</th><th>要求</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>大文件</td><td>阈值跳过 + 强制打开警告 + 虚拟滚动</td></tr>
+              <tr><td>编码</td><td>UTF-8 优先；BOM 检测；失败降级字节 diff</td></tr>
+              <tr><td>换行</td><td>比较时可归一；导出可选保留</td></tr>
+              <tr><td>二进制</td><td>永不按文本渲染；UI 显示 size/hash</td></tr>
+              <tr><td>权限</td><td>单文件失败不拖垮全局；错误列表可导出</td></tr>
+              <tr><td>扩展</td><td>核心库与 UI 解耦；导出器、忽略器可插拔</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 5 -->
+      <section class="doc" id="tech">
+        <h2><span class="sec-num">5</span>技术方案</h2>
+        <p class="sec-lead">推荐 Tauri 2 + Rust 核心 + 轻量前端；CLI 与 GUI 共享同一 Rust core，避免两套 diff 实现。</p>
+
+        <h3 id="stack">5.1 技术选型</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>层</th><th>选型</th><th>备选</th><th>理由</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>桌面壳</td>
+                <td><strong>Tauri 2</strong></td>
+                <td>Wails</td>
+                <td>系统 WebView、安装包小、Rust 同源、跨平台成熟</td>
+              </tr>
+              <tr>
+                <td>核心</td>
+                <td><strong>Rust</strong></td>
+                <td>Go</td>
+                <td>并行、内存安全、diff/ignore 生态好、静态链接体积可控</td>
+              </tr>
+              <tr>
+                <td>前端</td>
+                <td><strong>Svelte 5 或 React 18 + Vite</strong></td>
+                <td>Vue</td>
+                <td>开发效率高；Svelte 产物更小，二者均可。推荐 Svelte 控体积</td>
+              </tr>
+              <tr>
+                <td>Diff 渲染</td>
+                <td><strong>自研虚拟列表 Diff 视图</strong></td>
+                <td>CodeMirror 6 / Monaco</td>
+                <td>Monaco 过重；CodeMirror 可做编辑器，但纯 diff 展示自研更轻、更可控</td>
+              </tr>
+              <tr>
+                <td>CLI</td>
+                <td>clap + 同一 core crate</td>
+                <td>独立 CLI 语言</td>
+                <td>复用扫描/哈希/diff/导出，行为一致</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout warn">
+            <strong>为什么不默认 Electron：</strong>安装包通常 80–150 MB，内存占用高，与「体积小、本地轻量」目标冲突。Tauri 使用系统 WebView，安装包常可压到 10–25 MB 量级。
+          </div>
+        </div>
+
+        <h4>关键 Rust 库</h4>
+        <div class="pill-row">
+          <span class="pill">ignore</span>
+          <span class="pill">walkdir</span>
+          <span class="pill">blake3</span>
+          <span class="pill">rayon</span>
+          <span class="pill">similar</span>
+          <span class="pill">imara-diff</span>
+          <span class="pill">serde / serde_json</span>
+          <span class="pill">clap</span>
+          <span class="pill">encoding_rs</span>
+          <span class="pill">thiserror / anyhow</span>
+          <span class="pill">indicatif</span>
+          <span class="pill">globset</span>
+        </div>
+
+        <h3 id="algorithms">5.2 关键实现思路</h3>
+        <div class="card">
+          <h4>文件遍历与忽略</h4>
+          <ul>
+            <li>使用 <code class="inline">ignore</code> crate（含 gitignore 语义）+ 自定义 globset 叠加。</li>
+            <li><code class="inline">walkdir</code> / <code class="inline">ignore::WalkParallel</code> 并行遍历 A/B。</li>
+            <li>符号链接默认不跟随；检测到循环则跳过并计入警告。</li>
+          </ul>
+          <h4>哈希预筛</h4>
+          <ul>
+            <li>第一键：相对路径；第二键：size。</li>
+            <li>size 相同才计算 blake3（可只读首尾 64KB 做 fast-hash，冲突再全量）。</li>
+            <li>hash 相同 → Same（或 Rename 候选）。</li>
+          </ul>
+          <h4>Diff 算法</h4>
+          <ul>
+            <li>行级：优先 <code class="inline">imara-diff</code>（Myers/Patience，适合大文件）或 <code class="inline">similar</code>。</li>
+            <li>词级/字符级高亮：对「改」行再跑短串 LCS。</li>
+            <li>输出内部 hunk 模型，再序列化为 unified diff / JSON / HTML。</li>
+          </ul>
+          <h4>重命名检测（P1）</h4>
+          <ul>
+            <li>集合：Deleted × Added。</li>
+            <li>哈希全等 → 确定 Rename。</li>
+            <li>否则相似度（如 token 相同率）≥ 0.6 → Probable Rename；在 UI 可折叠为一对。</li>
+          </ul>
+          <h4>二进制检测</h4>
+          <ul>
+            <li>魔数（PNG/PDF/ZIP/ELF…）或前 8KB 含 NUL / 高比例不可打印字节 → Binary。</li>
+            <li>Binary 只比较 size + hash，UI 显示「二进制差异」。</li>
+          </ul>
+        </div>
+
+        <h3 id="architecture">5.3 架构与模块</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 920 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="系统架构">
+            <rect x="40" y="40" width="240" height="280" rx="12" fill="#f6f8fb" stroke="#e2e8f0"/>
+            <text x="160" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">UI Layer</text>
+            <rect x="65" y="95" width="190" height="44" rx="8" fill="#fff" stroke="#bfdbfe"/>
+            <text x="160" y="122" text-anchor="middle" font-size="12" fill="#1e3a8a">Project Picker</text>
+            <rect x="65" y="155" width="190" height="44" rx="8" fill="#fff" stroke="#bfdbfe"/>
+            <text x="160" y="182" text-anchor="middle" font-size="12" fill="#1e3a8a">File Tree + Filters</text>
+            <rect x="65" y="215" width="190" height="44" rx="8" fill="#fff" stroke="#bfdbfe"/>
+            <text x="160" y="242" text-anchor="middle" font-size="12" fill="#1e3a8a">Diff View (virtual)</text>
+            <rect x="65" y="275" width="190" height="30" rx="8" fill="#fff" stroke="#bfdbfe"/>
+            <text x="160" y="295" text-anchor="middle" font-size="12" fill="#1e3a8a">Report / Export</text>
+
+            <rect x="340" y="40" width="240" height="280" rx="12" fill="#eff6ff" stroke="#2563eb"/>
+            <text x="460" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#1e3a8a">Core (Rust crate)</text>
+            <rect x="365" y="95" width="190" height="44" rx="8" fill="#fff" stroke="#93c5fd"/>
+            <text x="460" y="122" text-anchor="middle" font-size="12" fill="#0f172a">scanner · ignore · hash</text>
+            <rect x="365" y="155" width="190" height="44" rx="8" fill="#fff" stroke="#93c5fd"/>
+            <text x="460" y="182" text-anchor="middle" font-size="12" fill="#0f172a">matcher · rename</text>
+            <rect x="365" y="215" width="190" height="44" rx="8" fill="#fff" stroke="#93c5fd"/>
+            <text x="460" y="242" text-anchor="middle" font-size="12" fill="#0f172a">diff · hunk · stats</text>
+            <rect x="365" y="275" width="190" height="30" rx="8" fill="#fff" stroke="#93c5fd"/>
+            <text x="460" y="295" text-anchor="middle" font-size="12" fill="#0f172a">exporters</text>
+
+            <rect x="640" y="40" width="240" height="280" rx="12" fill="#f6f8fb" stroke="#e2e8f0"/>
+            <text x="760" y="70" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">Entry Points</text>
+            <rect x="665" y="110" width="190" height="52" rx="8" fill="#fff" stroke="#cbd5e1"/>
+            <text x="760" y="141" text-anchor="middle" font-size="12" fill="#0f172a">Tauri GUI commands</text>
+            <rect x="665" y="190" width="190" height="52" rx="8" fill="#fff" stroke="#cbd5e1"/>
+            <text x="760" y="221" text-anchor="middle" font-size="12" fill="#0f172a">CLI (clap)</text>
+            <rect x="665" y="270" width="190" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/>
+            <text x="760" y="293" text-anchor="middle" font-size="12" fill="#0f172a">JSON / patch writers</text>
+
+            <line x1="280" y1="180" x2="335" y2="180" stroke="#2563eb" stroke-width="2"/>
+            <line x1="580" y1="180" x2="635" y2="180" stroke="#2563eb" stroke-width="2"/>
+          </svg>
+          <div class="diagram-cap">图 2 · GUI 与 CLI 共享 Rust Core，避免双实现</div>
+        </div>
+
+        <h3>5.4 目录结构建议</h3>
+        <pre>dualdiff/
+├── crates/
+│   ├── dualdiff-core/          # 扫描、匹配、diff、统计、导出
+│   │   ├── src/
+│   │   │   ├── scan.rs
+│   │   │   ├── ignore_rules.rs
+│   │   │   ├── hash.rs
+│   │   │   ├── map.rs
+│   │   │   ├── diff_text.rs
+│   │   │   ├── rename.rs
+│   │   │   ├── binary.rs
+│   │   │   ├── stats.rs
+│   │   │   ├── export/
+│   │   │   │   ├── patch.rs
+│   │   │   │   ├── json.rs
+│   │   │   │   ├── html.rs
+│   │   │   │   ├── markdown.rs
+│   │   │   │   └── csv.rs
+│   │   │   └── model.rs        # FileEntry / DiffHunk / Report
+│   │   └── Cargo.toml
+│   └── dualdiff-cli/
+│       └── src/main.rs
+├── apps/
+│   └── desktop/                # Tauri + Svelte/React
+│       ├── src/                # 前端
+│       └── src-tauri/          # 薄壳，调用 core
+├── packages/                   # 可选：共享 TS 类型
+└── docs/</pre>
+
+        <h3>5.5 关键数据模型（JSON 报告骨架）</h3>
+        <pre>{
+  "version": 1,
+  "generatedAt": "2026-03-01T10:00:00Z",
+  "a": { "root": "D:/projA", "label": "baseline" },
+  "b": { "root": "D:/projB", "label": "candidate" },
+  "summary": {
+    "filesTotal": 1200,
+    "added": 12, "deleted": 8, "modified": 45,
+    "renamed": 3, "binaryDiff": 2,
+    "addedLines": 320, "deletedLines": 210
+  },
+  "files": [
+    {
+      "path": "src/config.ts",
+      "status": "modified",
+      "aSize": 1200, "bSize": 1280,
+      "addedLines": 4, "deletedLines": 3,
+      "binary": false
+    }
+  ]
+}</pre>
+
+        <h3>5.6 核心 API（Rust → GUI/CLI）</h3>
+        <pre>pub fn compare_projects(opt: CompareOptions) -> Result&lt;CompareReport&gt;;
+pub fn file_diff(a: &amp;Path, b: &amp;Path, opt: &amp;DiffOptions) -> Result&lt;FileDiff&gt;;
+pub fn export_report(report: &amp;CompareReport, fmt: ExportFormat, out: &amp;Path) -> Result&lt;()&gt;;
+
+// CompareOptions: roots, ignore_preset, custom_ignores,
+// follow_symlinks, max_file_size, detect_rename, line_endings</pre>
+
+        <h3>5.7 性能要点</h3>
+        <div class="grid-2">
+          <div class="card tinted">
+            <h4>扫描</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">并行遍历 + 增量事件推送到 UI（进度条）；哈希线程池 rayon；仅对候选文件做全量读。</p>
+          </div>
+          <div class="card tinted">
+            <h4>渲染</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">虚拟滚动只挂载可见行；hunk 预计算；大文件默认不进 DOM，点击时再算。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 -->
+      <section class="doc" id="uiux">
+        <h2><span class="sec-num">6</span>UI / UX 设计</h2>
+        <p class="sec-lead">Harness 风格：白底、浅灰分区、蓝色强调、圆角卡片、清晰层级；信息密度高但不拥挤。</p>
+
+        <h3>6.1 视觉规范</h3>
+        <div class="swatches">
+          <div class="swatch"><div class="color" style="background:#ffffff"></div><div class="meta"><b>背景</b>#FFFFFF</div></div>
+          <div class="swatch"><div class="color" style="background:#f6f8fb"></div><div class="meta"><b>浅灰分区</b>#F6F8FB</div></div>
+          <div class="swatch"><div class="color" style="background:#e2e8f0"></div><div class="meta"><b>描边</b>#E2E8F0</div></div>
+          <div class="swatch"><div class="color" style="background:#0f172a"></div><div class="meta"><b>主文字</b>#0F172A</div></div>
+          <div class="swatch"><div class="color" style="background:#2563eb"></div><div class="meta"><b>强调蓝</b>#2563EB</div></div>
+          <div class="swatch"><div class="color" style="background:#64748b"></div><div class="meta"><b>次级文字</b>#64748B</div></div>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Token</th><th>值</th><th>用途</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>radius-card</td><td>12px</td><td>卡片、面板</td></tr>
+              <tr><td>radius-btn</td><td>8px</td><td>按钮、输入框</td></tr>
+              <tr><td>space</td><td>4 / 8 / 12 / 16 / 24 / 32</td><td>8px 节奏</td></tr>
+              <tr><td>font-ui</td><td>Inter / PingFang SC / Microsoft YaHei</td><td>界面</td></tr>
+              <tr><td>font-mono</td><td>Cascadia Code / SF Mono / Consolas</td><td>代码与 diff</td></tr>
+              <tr><td>text-title</td><td>20–24px / 700</td><td>页标题</td></tr>
+              <tr><td>text-body</td><td>13–14px / 400</td><td>正文与表格</td></tr>
+              <tr><td>text-code</td><td>12–13px</td><td>diff 行</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>按钮层级</h4>
+        <div class="pill-row">
+          <span class="pill" style="background:#2563eb;color:#fff;border-color:#2563eb;">Primary · 开始对比</span>
+          <span class="pill">Secondary · 选择目录</span>
+          <span class="pill">Ghost · 交换 A/B</span>
+          <span class="pill" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;">Danger · 清除会话</span>
+        </div>
+
+        <h4>状态色约定</h4>
+        <div class="pill-row">
+          <span class="badge ok">Same</span>
+          <span class="badge p2">Added</span>
+          <span class="badge p1">Modified</span>
+          <span class="badge p0">Deleted</span>
+          <span class="badge muted">Binary / Ignored</span>
+        </div>
+
+        <h3>6.2 页面布局（主界面）</h3>
+        <div class="wireframe">
+          <pre>┌──────────────────────────────────────────────────────────────────────────┐
+│ DualDiff          [工程 A ▾]  ⇄  [工程 B ▾]     [忽略] [开始对比] [导出] │
+├──────────────┬───────────────────────────────────────┬───────────────────┤
+│ 文件树       │  Diff 视图（并排 / 统一）              │  统计 & 过滤      │
+│              │                                       │                   │
+│ 🔍 过滤…     │  src/config.ts                    M   │  摘要             │
+│ ☑ 改 ☑ 删   │  ┌─────────────┬─────────────┐        │  +320  -210       │
+│ ☐ 增 ☐ 二进 │  │ A           │ B           │        │  文件 1200        │
+│              │  │ 13 timeout… │ 13 timeout… │        │  改 45 增 12      │
+│ src/         │  │ 14 retries… │ 14 retries… │        │  删 8  二进 2     │
+│  ├ config.ts │  │ 15 host…    │ 15 host…    │        │                   │
+│  ├ api.ts    │  └─────────────┴─────────────┘        │  变更 Top 目录    │
+│  └ utils.ts  │  上一变更 / 下一变更 / 复制 hunk      │  src/ 38          │
+│ scripts/     │                                       │  docs/ 6          │
+├──────────────┴───────────────────────────────────────┴───────────────────┤
+│ 就绪 · 扫描 1200 文件 · 1.8s · 忽略 234 · 编码 UTF-8 · CRLF 已归一        │
+└──────────────────────────────────────────────────────────────────────────┘</pre>
+        </div>
+
+        <h3>6.3 组件规范</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>组件</th><th>规范</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>工程选择器</td><td>浅灰底输入条 + 浏览按钮；路径 monospace；错误态红描边 + 说明文案</td></tr>
+              <tr><td>文件树</td><td>虚拟列表；状态圆点 + 文件名；目录可折叠；右键复制路径（P1）</td></tr>
+              <tr><td>Diff 视图</td><td>行号灰、变更行背景色块、词级高亮更饱和；同步滚动</td></tr>
+              <tr><td>表格</td><td>表头浅灰、行 hover、数值右对齐、密集行高 36–40px</td></tr>
+              <tr><td>标签 Badge</td><td>胶囊形，小号 11–12px，状态色只用于状态语义</td></tr>
+              <tr><td>空状态</td><td>居中插图式线框 + 主按钮「选择两个工程」+ 次要「加载示例」</td></tr>
+              <tr><td>加载</td><td>顶部细进度条 + 扫描中数字跳动；可取消</td></tr>
+              <tr><td>错误</td><td>卡片内联错误，不打断布局；提供「重试 / 更换路径」</td></tr>
+              <tr><td>Toast</td><td>成功导出显示 3s；可关闭</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>6.4 交互流程</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 920 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="用户流程">
+            <defs>
+              <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/>
+              </marker>
+            </defs>
+            <rect x="20" y="55" width="140" height="56" rx="10" fill="#fff" stroke="#e2e8f0"/>
+            <text x="90" y="88" text-anchor="middle" font-size="13" fill="#0f172a">选择目录 A/B</text>
+            <rect x="200" y="55" width="140" height="56" rx="10" fill="#fff" stroke="#e2e8f0"/>
+            <text x="270" y="88" text-anchor="middle" font-size="13" fill="#0f172a">配置忽略规则</text>
+            <rect x="380" y="55" width="140" height="56" rx="10" fill="#eff6ff" stroke="#2563eb"/>
+            <text x="450" y="88" text-anchor="middle" font-size="13" fill="#1e3a8a">扫描 / 对比</text>
+            <rect x="560" y="55" width="150" height="56" rx="10" fill="#fff" stroke="#e2e8f0"/>
+            <text x="635" y="80" text-anchor="middle" font-size="13" fill="#0f172a">摘要 + 文件树</text>
+            <text x="635" y="98" text-anchor="middle" font-size="11" fill="#64748b">过滤 · 查看单文件</text>
+            <rect x="750" y="55" width="150" height="56" rx="10" fill="#ecfdf5" stroke="#059669"/>
+            <text x="825" y="88" text-anchor="middle" font-size="13" fill="#065f46">导出报告</text>
+            <line x1="160" y1="83" x2="195" y2="83" stroke="#64748b" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <line x1="340" y1="83" x2="375" y2="83" stroke="#64748b" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <line x1="520" y1="83" x2="555" y2="83" stroke="#64748b" stroke-width="1.5" marker-end="url(#ar2)"/>
+            <line x1="710" y1="83" x2="745" y2="83" stroke="#64748b" stroke-width="1.5" marker-end="url(#ar2)"/>
+          </svg>
+          <div class="diagram-cap">图 3 · 选择 → 配置 → 扫描 → 浏览 → 导出</div>
+        </div>
+
+        <h3>6.5 关键页面说明</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>空状态 / 欢迎</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">大面积留白 + 标题「对比两个工程」+ 双路径槽位 +「开始对比」；下方三枚场景快捷入口（迁移 / 审计 / 验收）。</p>
+          </div>
+          <div class="card">
+            <h4>对比结果</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">三栏布局（树 / Diff / 统计）；顶部保留 A/B 路径与交换按钮；底部状态栏常驻扫描摘要。</p>
+          </div>
+          <div class="card">
+            <h4>导出对话框</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">多选格式、是否包含 hunks、输出目录、文件名模板；预估报告大小；成功后 Toast + 打开文件夹。</p>
+          </div>
+          <div class="card">
+            <h4>设置</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink-2);">忽略预设开关、行尾策略、编码策略、大文件阈值、主题（浅色默认）、最近工程清除。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7 -->
+      <section class="doc" id="plan">
+        <h2><span class="sec-num">7</span>实施计划</h2>
+        <p class="sec-lead">MVP 锁定 P0；两周为一迭代，6–8 周可内部试用，10–12 周可对外 1.0。</p>
+
+        <h3>7.1 MVP 范围（必须有）</h3>
+        <div class="card">
+          <ul>
+            <li>选择两个目录，忽略规则（预设 + 基本自定义）</li>
+            <li>文件映射与状态分类（含二进制识别）</li>
+            <li>并排 + 统一 diff，行级高亮</li>
+            <li>工程统计摘要与简单过滤</li>
+            <li>导出 patch + JSON</li>
+            <li>Windows 优先打包，macOS/Linux 紧随</li>
+          </ul>
+        </div>
+
+        <h3>7.2 迭代路线图</h3>
+        <ul class="timeline">
+          <li>
+            <div class="t-title">M0 · 立项与骨架（1 周）</div>
+            <div class="t-meta">仓库结构、core 空接口、Tauri 壳、CI 构建、DESIGN 定稿</div>
+          </li>
+          <li>
+            <div class="t-title">M1 · 扫描与映射（2 周）</div>
+            <div class="t-meta">遍历、忽略、哈希预筛、状态分类、JSON 报告、CLI compare 雏形</div>
+          </li>
+          <li>
+            <div class="t-title">M2 · Diff 引擎与视图（2 周）</div>
+            <div class="t-meta">imara/similar 集成、hunk 模型、并排/统一视图、虚拟列表</div>
+          </li>
+          <li>
+            <div class="t-title">M3 · 统计 / 过滤 / patch 导出（1–2 周）</div>
+            <div class="t-meta">摘要面板、过滤搜索、unified diff 导出、错误与空态打磨</div>
+          </li>
+          <li>
+            <div class="t-title">M4 · 报告与体验（2 周）</div>
+            <div class="t-meta">HTML/MD/CSV、重命名检测、编码/行尾策略、性能压测</div>
+          </li>
+          <li>
+            <div class="t-title">M5 · 1.0 打磨与分发（2 周）</div>
+            <div class="t-meta">三端打包、快捷键、文档、示例工程、回归用例、发布</div>
+          </li>
+        </ul>
+
+        <h3>7.3 风险与规避</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>风险</th><th>影响</th><th>规避</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>超大工程卡顿</td>
+                <td>体验差、内存暴涨</td>
+                <td>并行扫描、哈希预筛、大文件跳过、虚拟滚动、分页加载 hunks</td>
+              </tr>
+              <tr>
+                <td>diff 算法在极端文件退化</td>
+                <td>耗时过长</td>
+                <td>时间/规模上限；超限降级为「仅统计」；imara patience 模式</td>
+              </tr>
+              <tr>
+                <td>Windows 路径/编码坑</td>
+                <td>错比、乱码</td>
+                <td>全程 UTF-8 内部表示；encoding_rs；集成中文路径用例</td>
+              </tr>
+              <tr>
+                <td>Tauri WebView 差异</td>
+                <td>UI 不一致</td>
+                <td>控制 CSS 兼容面；以 Windows WebView2 / macOS WKWebView 实测为准</td>
+              </tr>
+              <tr>
+                <td>范围蔓延（语义 diff / 在线协作）</td>
+                <td>延误 1.0</td>
+                <td>严格 P0 边界；P2 插件化，不进主路径</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>7.4 验收标准（摘要）</h3>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>验收项</th><th>标准</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>功能完整</td><td>MVP 清单 100% 可用；P0 用例通过率 100%</td></tr>
+              <tr><td>正确性</td><td>与 <code class="inline">git diff --no-index</code> 在抽样集一致率 ≥ 99%</td></tr>
+              <tr><td>性能</td><td>1 万文件摘要 &lt; 3s（SSD）；UI 无卡死可取消</td></tr>
+              <tr><td>体积</td><td>Windows 安装包 ≤ 30 MB</td></tr>
+              <tr><td>隐私</td><td>断网可完整使用；抓包无代码外传</td></tr>
+              <tr><td>稳定性</td><td>含中文路径、空目录、二进制、无权限文件的用例不崩溃</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- appendix -->
+      <section class="doc" id="appendix">
+        <h2><span class="sec-num">A</span>附录 · 测试用例与验收清单</h2>
+        <p class="sec-lead">下列用例可直接录入测试管理工具，作为 1.0 准出门槛。</p>
+
+        <div class="card">
+          <h3>功能测试</h3>
+          <table>
+            <thead>
+              <tr><th>ID</th><th>步骤</th><th>期望</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>T01</td>
+                <td>选择含 3 个同内容 + 2 个已改 + 1 个仅 A + 1 个仅 B 的工程对</td>
+                <td>分类正确；统计 = 3/2/1/1</td>
+              </tr>
+              <tr>
+                <td>T02</td>
+                <td>开启默认忽略后对比含 node_modules 的工程</td>
+                <td>依赖目录不进入文件树；忽略计数 &gt; 0</td>
+              </tr>
+              <tr>
+                <td>T03</td>
+                <td>修改单行并查看并排 diff</td>
+                <td>行号对齐；词级高亮；下一变更可跳转</td>
+              </tr>
+              <tr>
+                <td>T04</td>
+                <td>导出 patch 后执行 git apply --check</td>
+                <td>在干净工程上可应用</td>
+              </tr>
+              <tr>
+                <td>T05</td>
+                <td>JSON 导出后用脚本解析 summary</td>
+                <td>字段与 UI 摘要一致</td>
+              </tr>
+              <tr>
+                <td>T06</td>
+                <td>对比两处 PNG（内容不同）</td>
+                <td>标记 Binary Diff，无文本行</td>
+              </tr>
+              <tr>
+                <td>T07</td>
+                <td>文件改名且内容不变</td>
+                <td>P1：显示 Renamed 一对，而非 1 删 1 增</td>
+              </tr>
+              <tr>
+                <td>T08</td>
+                <td>CLI：--fail-on modified 且存在修改文件</td>
+                <td>退出码非 0；stdout 含摘要</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>非功能测试</h3>
+          <table>
+            <thead>
+              <tr><th>ID</th><th>场景</th><th>期望</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>N01</td><td>1 万文件冷扫描</td><td>摘要 &lt; 3s；进度可见</td></tr>
+              <tr><td>N02</td><td>5 MB 文本</td><td>默认 large，不卡 UI；可强制打开</td></tr>
+              <tr><td>N03</td><td>中文/空格路径</td><td>扫描、diff、导出路径正确</td></tr>
+              <tr><td>N04</td><td>只读/无权限文件</td><td>警告列表，不整体失败</td></tr>
+              <tr><td>N05</td><td>安装包体积</td><td>≤ 30 MB</td></tr>
+              <tr><td>N06</td><td>断网运行全流程</td><td>全部功能可用</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>下一步建议：</strong>① 用 2–3 个真实工程对做「映射正确性」原型验证；② 锁定 Svelte 或 React；③ 按 M0–M5 拆分 Jira/Issue；④ 先出 CLI-only 的 core 包，GUI 跟进。按本 PRD 可直接进入产品设计、技术选型与开发排期。
+        </div>
+      </section>
+
+      <footer class="footer">
+        DualDiff PRD · 双工程代码差异对比工具 · 文档版本 1.0 · 本地生成 · 可打印/可分享
+      </footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

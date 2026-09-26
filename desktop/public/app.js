@@ -73,6 +73,7 @@
     hideUnchanged: true,
     caseSensitive: false,
     codeOnly: true,
+    typeFilter: "all",
     customIgnores: "node_modules\ndist\nbuild\n.git\nDebug\nRelease\nobj\nbin",
     scanning: false,
   };
@@ -178,6 +179,20 @@
     if (dot < 0) return false;
     const ext = base.slice(dot + 1);
     return CODE_EXTS.has(ext);
+  }
+
+  function fileKind(relPath) {
+    const base = (relPath.split("/").pop() || relPath).toLowerCase();
+    const ext = base.includes(".") ? base.slice(base.lastIndexOf(".") + 1) : "";
+    if (["json", "yml", "yaml", "toml", "ini", "cfg", "conf", "env", "xml", "properties"].includes(ext)) return "config";
+    if (["md", "markdown", "txt", "rst", "adoc", "pdf"].includes(ext)) return "docs";
+    if (["png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "mp4", "mp3", "woff", "woff2", "ttf", "eot", "zip", "gz", "exe", "dll", "so"].includes(ext))
+      return "other";
+    return isCodeFile(relPath) ? "code" : "other";
+  }
+
+  function t(key) {
+    return (window.DualDiffI18n && window.DualDiffI18n.t(key)) || key;
   }
 
   function parseIgnorePatterns() {
@@ -564,6 +579,12 @@
     let rows = state.results.slice();
     if (state.hideUnchanged) rows = rows.filter((r) => r.status !== "same");
     if (state.codeOnly) rows = rows.filter((r) => isCodeFile(r.path));
+    if (state.typeFilter !== "all") {
+      rows = rows.filter((r) => {
+        const k = fileKind(r.path);
+        return k === state.typeFilter;
+      });
+    }
     if (state.filter !== "all") rows = rows.filter((r) => r.status === state.filter);
     if (state.search) {
       const q = state.caseSensitive ? state.search : state.search.toLowerCase();
@@ -1128,6 +1149,54 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       state.filter = chip.getAttribute("data-f") || "all";
       document.querySelectorAll("#filterChips .chip").forEach((c) => c.classList.toggle("on", c === chip));
       renderTree();
+    });
+
+    // type dropdown
+    const typeBtn = $("typeFilterBtn");
+    const typeMenu = $("typeFilterMenu");
+    const typeLabel = $("typeFilterLabel");
+    function closeTypeMenu() {
+      if (!typeMenu || !typeBtn) return;
+      typeMenu.hidden = true;
+      typeBtn.setAttribute("aria-expanded", "false");
+    }
+    typeBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!typeMenu) return;
+      const open = typeMenu.hidden;
+      typeMenu.hidden = !open;
+      typeBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    typeMenu?.addEventListener("click", (e) => {
+      const li = e.target.closest("li[data-type]");
+      if (!li) return;
+      state.typeFilter = li.getAttribute("data-type") || "all";
+      typeMenu.querySelectorAll("li").forEach((x) => x.classList.toggle("on", x === li));
+      if (typeLabel) {
+        typeLabel.setAttribute("data-i18n", li.getAttribute("data-i18n") || "type.all");
+        if (window.DualDiffI18n) window.DualDiffI18n.apply(document);
+      }
+      closeTypeMenu();
+      renderTree();
+    });
+    document.addEventListener("click", (e) => {
+      if (typeMenu && !typeMenu.hidden && !e.target.closest(".dropdown-wrap")) closeTypeMenu();
+    });
+
+    // PRD — never navigate the app shell away
+    document.querySelectorAll("[data-open-prd]").forEach((el) => {
+      el.addEventListener("click", async (e) => {
+        e.preventDefault();
+        if (window.dualdiffDesktop && window.dualdiffDesktop.openExternal) {
+          await window.dualdiffDesktop.openExternal("prd.html");
+          return;
+        }
+        window.open("prd.html", "_blank", "noopener");
+      });
+    });
+
+    window.addEventListener("dualdiff-lang", () => {
+      renderAll();
     });
 
     $("viewSeg")?.addEventListener("click", (e) => {
