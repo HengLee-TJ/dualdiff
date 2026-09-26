@@ -174,6 +174,17 @@
     return out;
   }
 
+  /** Line key used for LCS alignment when ignoring comment/format. */
+  function lineCompareKey(text, path, opts) {
+    opts = opts || {};
+    var style = commentStyleOf(path);
+    var t = String(text == null ? "" : text);
+    if (opts.ignoreComment && opts.ignoreFormat) return codeKey(t, path);
+    if (opts.ignoreComment) return noWs(stripComments(t, style));
+    if (opts.ignoreFormat) return noWs(t);
+    return t.replace(/\r\n/g, "\n");
+  }
+
   root.DiffClass = {
     commentStyleOf: commentStyleOf,
     stripComments: stripComments,
@@ -183,6 +194,7 @@
     codeKey: codeKey,
     classifyChange: classifyChange,
     classifySoloLine: classifySoloLine,
-    mergeStylePairs: mergeStylePairs
+    mergeStylePairs: mergeStylePairs,
+    lineCompareKey: lineCompareKey
   };
 })(typeof window !== "undefined" ? window : globalThis);

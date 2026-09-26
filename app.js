@@ -75,8 +75,8 @@
     codeOnly: true,
     typeFilter: "all",
     ignoreEncoding: true,
-    ignoreComment: false,
-    ignoreFormat: false,
+    ignoreComment: true,
+    ignoreFormat: true,
     collapseContext: true,
     contextLines: 3,
     changeCursor: 0,
@@ -686,7 +686,26 @@
           status = "same";
         } else {
           status = "modified";
-          ops = markWordHL(diffLines(splitLines(a.text || ""), splitLines(b.text || "")));
+          const aLines = splitLines(a.text || "");
+          const bLines = splitLines(b.text || "");
+          const useKey =
+            (state.ignoreComment || state.ignoreFormat) &&
+            window.DiffClass &&
+            window.DiffClass.lineCompareKey;
+          const aCmp = useKey
+            ? aLines.map((l) => window.DiffClass.lineCompareKey(l, path, state))
+            : aLines;
+          const bCmp = useKey
+            ? bLines.map((l) => window.DiffClass.lineCompareKey(l, path, state))
+            : bLines;
+          ops = diffLines(aCmp, bCmp);
+          // restore original line text for display before HL/classify
+          ops = ops.map(function (op) {
+            if (op.a != null && aLines[op.a] != null) op.aText = aLines[op.a];
+            if (op.b != null && bLines[op.b] != null) op.bText = bLines[op.b];
+            return op;
+          });
+          ops = markWordHL(ops);
           if (window.DiffClass && window.DiffClass.mergeStylePairs) {
             ops = window.DiffClass.mergeStylePairs(ops, path);
           }
