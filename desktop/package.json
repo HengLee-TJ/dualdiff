@@ -1,46 +1,11 @@
-{
-  "name": "dualdiff-desktop",
-  "version": "1.0.0",
-  "description": "DualDiff — 双工程代码差异对比（桌面版）",
-  "main": "main.js",
-  "author": "DualDiff",
-  "license": "MIT",
-  "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --win portable",
-    "dist": "electron-builder --win"
-  },
-  "devDependencies": {
-    "electron": "^44.4.5",
-    "electron-builder": "^26.15.3"
-  },
-  "build": {
-    "appId": "com.dualdiff.app",
-    "productName": "DualDiff",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "icon": "build/icon.ico",
-    "files": [
-      "main.js",
-      "preload.js",
-      "public/**/*"
-    ],
-    "win": {
-      "target": [
-        "portable",
-        "nsis"
-      ],
-      "artifactName": "DualDiff-${version}-${target}.${ext}",
-      "icon": "../assets/dualdiff-icon.ico"
-    },
-    "portable": {
-      "artifactName": "DualDiff-Portable.exe"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+{name:dualdiff-desktop,version:1.0.0,description:DualDiff — 双工程代码差异对比（桌面版）,main:main.js,author:DualDiff,license:MIT,scripts: {start:electron .,pack:electron-builder --win portable,dist:electron-builder --win
+  },devDependencies: {electron:^44.4.5,electron-builder:^26.15.3
+  },build: {appId:com.dualdiff.app,productName:DualDiff,directories: {output:dist,buildResources:build
+    },icon:build/icon.ico,files: [main.js,preload.js,public/**/*
+    ],win: {target: [portable,nsis
+      ],artifactName:DualDiff-${version}-${target}.${ext},icon:../assets/dualdiff-icon.ico
+    },portable: {artifactName:DualDiff-Portable.exe
+    },nsis: {oneClick: false,allowToChangeInstallationDirectory: true
     }
   }
 }

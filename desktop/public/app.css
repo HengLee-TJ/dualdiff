@@ -348,7 +348,7 @@
   border-color: var(--border-strong, #cbd5e1);
   background: var(--code-bg);
 }
-.dropdown[aria-expanded="true"] {
+.dropdown[aria-expanded=true] {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(91, 124, 159, 0.15);
 }

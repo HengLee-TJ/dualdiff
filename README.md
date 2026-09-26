@@ -75,9 +75,7 @@ npm run pack
 ### CLI-friendly JSON shape
 
 ```json
-{
-  "summary": { "modified": 3, "added": 1, "deleted": 1, "linesChanged": 26 },
-  "files": [{ "path": "src/config.ts", "status": "modified", "addedLines": 4, "deletedLines": 3 }]
+{summary: {modified: 3,added: 1,deleted: 1,linesChanged: 26 },files: [{path:src/config.ts,status:modified,addedLines: 4,deletedLines: 3 }]
 }
 ```
 

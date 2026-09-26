@@ -1,7 +1,7 @@
 ---
 name: premium-slate-ui
-description: "高级灰蓝（Slate / steel-blue）产品界面设计系统：设计令牌、应用壳层布局、SVG 线性图标、卡片/指标/文件树/Diff/状态栏组件规范，以及响应式防冲突规则。当需要构建桌面工具、开发者工具、SaaS 工作台、技术文档站、或任何要「白底 + 浅灰蓝分区 + 克制强调色 + 高信息密度」的专业界面时使用。可单独引用 tokens，也可整套落地 UI。"
-icon: "🎨"
+description:高级灰蓝（Slate / steel-blue）产品界面设计系统：设计令牌、应用壳层布局、SVG 线性图标、卡片/指标/文件树/Diff/状态栏组件规范，以及响应式防冲突规则。当需要构建桌面工具、开发者工具、SaaS 工作台、技术文档站、或任何要「白底 + 浅灰蓝分区 + 克制强调色 + 高信息密度」的专业界面时使用。可单独引用 tokens，也可整套落地 UI。
+icon:🎨
 ---
 
 # Premium Slate UI（高级灰蓝产品界面）
@@ -74,8 +74,8 @@ icon: "🎨"
   --shadow: 0 1px 2px rgba(26, 35, 48, 0.04),
             0 10px 32px rgba(26, 35, 48, 0.06);
 
-  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --mono: "Cascadia Code", "SF Mono", Consolas, monospace;
+  --font:Segoe UI,PingFang SC,Microsoft YaHei, system-ui, sans-serif;
+  --mono:Cascadia Code,SF Mono, Consolas, monospace;
 }
 ```
 
@@ -177,7 +177,7 @@ icon: "🎨"
 
 ## 5. 图标规范
 
-- 形式：**内联 SVG**，`viewBox="0 0 24 24"`，`stroke-width` 1.6–1.8，`stroke-linecap/linejoin: round`
+- 形式：**内联 SVG**，`viewBox=0 0 24 24`，`stroke-width` 1.6–1.8，`stroke-linecap/linejoin: round`
 - 尺寸：工具 15–18px，主按钮 18px，品牌 22–24px
 - 颜色：`currentColor` 或 `var(--ink-3)`；主按钮内用白色
 - **禁止** emoji、Unicode 手绘（`⇄ ⌕`）、CSS border 假图标
@@ -187,20 +187,20 @@ icon: "🎨"
 **导出（托盘下载）** — 导出/下载主按钮：
 
 ```html
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-  <path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor"
-        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 15.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"
-        stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+<svg width=18 height=18 viewBox=0 0 24 24 fill=none>
+  <path d=M12 3v11m0 0 4-4m-4 4-4-4 stroke=currentColor
+        stroke-width=1.8 stroke-linecap=round stroke-linejoin=round/>
+  <path d=M4 15.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5
+        stroke=currentColor stroke-width=1.8 stroke-linecap=round/>
 </svg>
 ```
 
 **交换（双向箭头）**：
 
 ```html
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-  <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3-3m-3 3 3 3"
-        stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width=18 height=18 viewBox=0 0 24 24 fill=none>
+  <path d=M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3-3m-3 3 3 3
+        stroke=currentColor stroke-width=1.8 stroke-linecap=round stroke-linejoin=round/>
 </svg>
 ```
 
