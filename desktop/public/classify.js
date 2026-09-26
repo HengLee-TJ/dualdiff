@@ -1,39 +1,39 @@
 /**
- * DualDiff — change kind classifier (code vs style: comment/format)
- * B: token-level compare  |  two-color UI  |  ignore toggles
+ * DualDiff — code vs style (comment/format) classifier
  */
-(function (root) {use strict;
+(function (root) {
+  "use strict";
 
   function commentStyleOf(path) {
-    const base = (path ||).split(/).pop() ||;
-    const ext = base.includes(.) ? base.slice(base.lastIndexOf(.) + 1).toLowerCase() :;
-    if ([py,sh,bash,rb,yml,yaml,toml,dockerfile,cmake,makefile].includes(ext)) returnhash;
-    if ([html,xml,svg,vue].includes(ext)) returnhtml;
-    returnc;
+    var base = (path || "").split("/").pop() || "";
+    var ext = base.indexOf(".") >= 0 ? base.slice(base.lastIndexOf(".") + 1).toLowerCase() : "";
+    if (["py", "sh", "bash", "rb", "yml", "yaml", "toml", "dockerfile", "cmake", "makefile"].indexOf(ext) >= 0) return "hash";
+    if (["html", "xml", "svg", "vue"].indexOf(ext) >= 0) return "html";
+    return "c";
   }
 
   function stripComments(src, style) {
-    const s = String(src == null ? : src);
-    if (style ===hash) return s.replace(/#.*$/,);
-    if (style ===html) return s.replace(/<!--[\s\S]*?-->/g,);
-    let out =;
-    let i = 0;
-    const n = s.length;
+    var s = String(src == null ? "" : src);
+    if (style === "hash") return s.replace(/#.*$/, "");
+    if (style === "html") return s.replace(/<!--[\s\S]*?-->/g, "");
+    var out = "";
+    var i = 0;
+    var n = s.length;
     while (i < n) {
-      const c = s[i];
-      if (c === '' || c ===') {
-        const q = c;
+      var c = s.charAt(i);
+      if (c === '"' || c === "'") {
+        var q = c;
         out += c;
         i++;
         while (i < n) {
-          out += s[i];
-          if (s[i] ===\\) {
+          out += s.charAt(i);
+          if (s.charAt(i) === "\\") {
             i++;
-            if (i < n) out += s[i];
+            if (i < n) out += s.charAt(i);
             i++;
             continue;
           }
-          if (s[i] === q) {
+          if (s.charAt(i) === q) {
             i++;
             break;
           }
@@ -41,13 +41,13 @@
         }
         continue;
       }
-      if (c ===/ && s[i + 1] ===/) {
-        while (i < n && s[i] !==\n) i++;
+      if (c === "/" && s.charAt(i + 1) === "/") {
+        while (i < n && s.charAt(i) !== "\n") i++;
         continue;
       }
-      if (c ===/ && s[i + 1] ===*) {
+      if (c === "/" && s.charAt(i + 1) === "*") {
         i += 2;
-        while (i < n && !(s[i] ===* && s[i + 1] ===/)) i++;
+        while (i < n && !(s.charAt(i) === "*" && s.charAt(i + 1) === "/")) i++;
         i += 2;
         continue;
       }
@@ -57,12 +57,16 @@
     return out;
   }
 
+  function noWs(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, "");
+  }
+
   function stripFormat(s) {
-    return String(s == null ? : s)
-      .replace(/\r\n/g,\n)
-      .replace(/[ \t]+/g,)
-      .replace(/ *\n */g,\n)
-      .replace(/\n{2,}/g,\n)
+    return String(s == null ? "" : s)
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .replace(/\n{2,}/g, "\n")
       .trim();
   }
 
@@ -71,114 +75,95 @@
   }
 
   function codeTokens(s) {
-    return String(s == null ? : s)
-      .replace(/\s+/g,)
-      .match(/[A-Za-z_][A-Za-z0-9_]*|\d+|[^]*|'[^']*'|\S/g) || [];
+    return String(s == null ? "" : s)
+      .replace(/\s+/g, " ")
+      .match(/[A-Za-z_][A-Za-z0-9_]*|\d+|"[^"]*"|'[^']*'|\S/g) || [];
   }
 
   function tokensEqual(a, b) {
-    return codeTokens(a).join() === codeTokens(b).join();
+    return codeTokens(a).join(" ") === codeTokens(b).join(" ");
   }
 
-  /**
-   * Pair change → { kind:code|style, reason:logic|comment|format }
-   */
-  function noWs(s) {
-    return String(s == null ? : s).replace(/\s+/g,);
+  function codeKey(text, path) {
+    return codeTokens(stripCommentsAndFormat(text, commentStyleOf(path))).join(" ");
   }
 
   function classifyChange(aText, bText, path) {
-    const style = commentStyleOf(path);
-    const a = aText == null ? : aText;
-    const b = bText == null ? : bText;
-    const ca = stripCommentsAndFormat(a, style);
-    const cb = stripCommentsAndFormat(b, style);
-    if (!tokensEqual(ca, cb)) {
-      return { kind:code, reason:logic };
+    var style = commentStyleOf(path);
+    var a = aText == null ? "" : aText;
+    var b = bText == null ? "" : bText;
+    if (!tokensEqual(stripCommentsAndFormat(a, style), stripCommentsAndFormat(b, style))) {
+      return { kind: "code", reason: "logic" };
     }
-    // same code tokens → format and/or comment only
-    if (noWs(a) === noWs(b)) {
-      return { kind:style, reason:format };
-    }
+    if (noWs(a) === noWs(b)) return { kind: "style", reason: "format" };
     if (noWs(stripComments(a, style)) === noWs(stripComments(b, style))) {
-      return { kind:style, reason:comment };
+      return { kind: "style", reason: "comment" };
     }
-    return { kind:style, reason:format };
+    return { kind: "style", reason: "format" };
   }
 
-  /** Lone add/del line. */
   function classifySoloLine(text, path) {
-    const style = commentStyleOf(path);
-    const t = String(text == null ? : text);
-    if (!t.trim()) return { kind:style, reason:format };
-    if (stripCommentsAndFormat(t, style) ===) return { kind:style, reason:comment };
-    return { kind:code, reason:logic };
+    var style = commentStyleOf(path);
+    var t = String(text == null ? "" : text);
+    if (!t.trim()) return { kind: "style", reason: "format" };
+    if (stripCommentsAndFormat(t, style) === "") return { kind: "style", reason: "comment" };
+    return { kind: "code", reason: "logic" };
   }
 
-  /** Stable key of the code body (comments/format stripped). */
-  function codeKey(text, path) {
-    const style = commentStyleOf(path);
-    return codeTokens(stripCommentsAndFormat(text, style)).join();
-  }
-
-  function formatKey(text, path) {
-    return noWs(stripComments(text, commentStyleOf(path)));
-  }
-
-  /**
-   * Merge del/add runs whose CODE keys match (comments/format may differ).
-   * Fixes: GBK mojibake comments break visual similarity but not code identity.
-   */
+  /** Pair del/add whose code keys match (comments/format may differ). */
   function mergeStylePairs(ops, path) {
-    const out = [];
-    const i = 0;
-    let idx = 0;
+    var out = [];
+    var idx = 0;
     while (idx < ops.length) {
-      const op = ops[idx];
-      if (op.type ===del) {
-        const dels = [];
-        while (idx < ops.length && ops[idx].type ===del) {
+      var op = ops[idx];
+      if (op.type === "del") {
+        var dels = [];
+        while (idx < ops.length && ops[idx].type === "del") {
           dels.push(ops[idx]);
           idx++;
         }
-        const adds = [];
-        while (idx < ops.length && ops[idx].type ===add) {
+        var adds = [];
+        while (idx < ops.length && ops[idx].type === "add") {
           adds.push(ops[idx]);
           idx++;
         }
-        const used = new Set();
-        for (const d of dels) {
-          const k = codeKey(d.aText ||, path);
-          const j = adds.findIndex(
-            (ad, ai) => !used.has(ai) && codeKey(ad.bText ||, path) === k
-          );
-          if (j >= 0 && k) {
-            used.add(j);
-            const ad = adds[j];
-            const c = classifyChange(d.aText ||, ad.bText ||, path);
+        var used = {};
+        for (var di = 0; di < dels.length; di++) {
+          var d = dels[di];
+          var k = codeKey(d.aText || "", path);
+          var j = -1;
+          if (k) {
+            for (var ai = 0; ai < adds.length; ai++) {
+              if (!used[ai] && codeKey(adds[ai].bText || "", path) === k) {
+                j = ai;
+                break;
+              }
+            }
+          }
+          if (j >= 0) {
+            used[j] = true;
+            var ad = adds[j];
+            var c = classifyChange(d.aText || "", ad.bText || "", path);
             out.push({
-              type:mod,
+              type: "mod",
               a: d.a,
               b: ad.b,
               aText: d.aText,
               bText: ad.bText,
-              aParts: wordPartsSimple(d.aText ||, ad.bText ||, true),
-              bParts: wordPartsSimple(d.aText ||, ad.bText ||, false),
+              aParts: [{ t: d.aText || "", ch: true }],
+              bParts: [{ t: ad.bText || "", ch: true }],
               kind: c.kind,
-              reason: c.reason,
-              pairedBy:codeKey,
+              reason: c.reason
             });
           } else {
-            out.push({ ...d, kind: d.kind || classifySoloLine(d.aText ||, path).kind });
+            out.push({ type: "del", a: d.a, aText: d.aText, kind: classifySoloLine(d.aText || "", path).kind, reason: classifySoloLine(d.aText || "", path).reason });
           }
         }
-        for (let ai = 0; ai < adds.length; ai++) {
-          if (!used.has(ai)) {
-            const ad = adds[ai];
-            out.push({
-              ...ad,
-              kind: ad.kind || classifySoloLine(ad.bText ||, path).kind,
-            });
+        for (var ai2 = 0; ai2 < adds.length; ai2++) {
+          if (!used[ai2]) {
+            var ad2 = adds[ai2];
+            var cs = classifySoloLine(ad2.bText || "", path);
+            out.push({ type: "add", b: ad2.b, bText: ad2.bText, kind: cs.kind, reason: cs.reason });
           }
         }
         continue;
@@ -189,21 +174,15 @@
     return out;
   }
 
-  /** Minimal inline parts (full-line mark when pairing by codeKey). */
-  function wordPartsSimple(a, b, isA) {
-    return [{ t: isA ? a : b, ch: true }];
-  }
-
   root.DiffClass = {
-    commentStyleOf,
-    stripComments,
-    stripFormat,
-    stripCommentsAndFormat,
-    codeTokens,
-    classifyChange,
-    classifySoloLine,
-    codeKey,
-    formatKey,
-    mergeStylePairs,
+    commentStyleOf: commentStyleOf,
+    stripComments: stripComments,
+    stripFormat: stripFormat,
+    stripCommentsAndFormat: stripCommentsAndFormat,
+    codeTokens: codeTokens,
+    codeKey: codeKey,
+    classifyChange: classifyChange,
+    classifySoloLine: classifySoloLine,
+    mergeStylePairs: mergeStylePairs
   };
-})(typeof window !==undefined ? window : globalThis);
+})(typeof window !== "undefined" ? window : globalThis);
