@@ -17,6 +17,15 @@
     "build",
     "out",
     "target",
+    "obj",
+    "bin",
+    "Debug",
+    "Release",
+    "debug",
+    "release",
+    "x64",
+    "x86",
+    "Debug_Root",
     "__pycache__",
     ".next",
     ".nuxt",
@@ -27,7 +36,29 @@
     "Thumbs.db",
     "*.log",
     "*.tmp",
+    "*.user",
+    "*.suo",
+    "*.pdb",
+    "*.ilk",
+    "*.exp",
+    "*.obj",
+    "*.o",
+    "*.class",
+    "*.pyc",
   ];
+
+  // Source-code focus set (for "code only" mode)
+  const CODE_EXTS = new Set([
+    "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx",
+    "cs", "java", "kt", "kts", "scala", "go", "rs", "swift",
+    "js", "jsx", "mjs", "cjs", "ts", "tsx",
+    "py", "rb", "php", "lua", "pl", "r",
+    "html", "htm", "css", "scss", "sass", "less", "vue", "svelte",
+    "json", "yml", "yaml", "toml", "ini", "cfg", "conf", "env",
+    "xml", "svg", "sql", "sh", "bash", "ps1", "bat", "cmd",
+    "md", "markdown", "txt", "gradle", "cmake", "mk", "makefile",
+    "dockerfile", "gitignore", "editorconfig",
+  ]);
 
   // ---------- State ----------
   const state = {
@@ -41,7 +72,8 @@
     ignoreEol: true,
     hideUnchanged: true,
     caseSensitive: false,
-    customIgnores: "node_modules\ndist\nbuild\n.git",
+    codeOnly: true,
+    customIgnores: "node_modules\ndist\nbuild\n.git\nDebug\nRelease\nobj\nbin",
     scanning: false,
   };
 
@@ -113,23 +145,39 @@
   }
 
   function isIgnored(relPath, patterns) {
-    const parts = relPath.split("/");
-    const base = parts[parts.length - 1];
+    const parts = relPath.split("/").filter(Boolean);
+    const base = (parts[parts.length - 1] || relPath).toLowerCase();
+    const lowerParts = parts.map((s) => s.toLowerCase());
+    const lowerPath = relPath.toLowerCase();
     for (const raw of patterns) {
-      const p = (raw || "").trim();
+      let p = (raw || "").trim();
       if (!p || p.startsWith("#")) continue;
-      if (p.startsWith("!")) continue; // negation not fully supported in MVP
-      // directory name match
-      if (parts.some((seg) => seg === p)) return true;
+      if (p.startsWith("!")) continue;
+      // normalize backslashes (Windows .gitignore)
+      p = p.replace(/\\/g, "/").replace(/\/+$/, "");
+      const pl = p.toLowerCase();
+      // exact directory/file segment (case-insensitive) — covers Debug, debug, DEBUG
+      if (lowerParts.includes(pl)) return true;
+      // prefix path like /Debug/ or Debug/
+      if (pl.endsWith("/") && lowerPath.startsWith(pl)) return true;
       // glob-ish *.ext
       if (p.startsWith("*.")) {
-        const ext = p.slice(1);
+        const ext = p.slice(1).toLowerCase();
         if (base.endsWith(ext)) return true;
       }
-      // substring path match
-      if (relPath.includes(p)) return true;
+      // path fragment
+      if (lowerPath.includes(pl)) return true;
     }
     return false;
+  }
+
+  function isCodeFile(relPath) {
+    const base = (relPath.split("/").pop() || relPath).toLowerCase();
+    if (base === "makefile" || base === "dockerfile" || base === "cmakelists.txt") return true;
+    const dot = base.lastIndexOf(".");
+    if (dot < 0) return false;
+    const ext = base.slice(dot + 1);
+    return CODE_EXTS.has(ext);
   }
 
   function parseIgnorePatterns() {
@@ -137,10 +185,17 @@
       .split(/\r?\n/)
       .map((s) => s.trim())
       .filter(Boolean);
-    // merge unique
     const set = [...DEFAULT_IGNORES];
     for (const c of custom) if (!set.includes(c)) set.push(c);
     return set;
+  }
+
+  function parseGitignoreText(text) {
+    return (text || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !s.startsWith("#") && !s.startsWith("!"))
+      .map((s) => s.replace(/\\/g, "/").replace(/\/+$/, ""));
   }
 
   // ---------- Line diff (LCS) ----------
@@ -484,7 +539,7 @@
   }
 
   function summary() {
-    const r = state.results;
+    const r = state.codeOnly ? state.results.filter((x) => isCodeFile(x.path)) : state.results;
     const mod = r.filter((x) => x.status === "modified").length;
     const add = r.filter((x) => x.status === "added").length;
     const del = r.filter((x) => x.status === "deleted").length;
@@ -508,6 +563,7 @@
     if (!host) return;
     let rows = state.results.slice();
     if (state.hideUnchanged) rows = rows.filter((r) => r.status !== "same");
+    if (state.codeOnly) rows = rows.filter((r) => isCodeFile(r.path));
     if (state.filter !== "all") rows = rows.filter((r) => r.status === state.filter);
     if (state.search) {
       const q = state.caseSensitive ? state.search : state.search.toLowerCase();
@@ -836,16 +892,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 </body></html>`;
   }
 
-  async function download(filename, content, mime) {
-    if (window.dualdiffDesktop && window.dualdiffDesktop.saveText) {
-      const ext = filename.split(".").pop();
-      const saved = await window.dualdiffDesktop.saveText({
-        defaultName: filename,
-        content: typeof content === "string" ? content : String(content),
-        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
-      });
-      return saved;
-    }
+  function download(filename, content, mime) {
     const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -855,10 +902,9 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return filename;
   }
 
-  async function doExport() {
+  function doExport() {
     const fmts = [...document.querySelectorAll("[data-fmt]")].filter((x) => x.checked).map((x) => x.getAttribute("data-fmt"));
     if (!fmts.length) {
       toast("请选择至少一种导出格式");
@@ -870,11 +916,11 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     }
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     for (const f of fmts) {
-      if (f === "patch") await download(`dualdiff-${stamp}.patch`, buildPatch(), "text/plain");
-      if (f === "json") await download(`dualdiff-${stamp}.json`, JSON.stringify(buildJson(), null, 2), "application/json");
-      if (f === "md") await download(`dualdiff-${stamp}.md`, buildMarkdown(), "text/markdown");
-      if (f === "csv") await download(`dualdiff-${stamp}.csv`, buildCsv(), "text/csv");
-      if (f === "html") await download(`dualdiff-${stamp}.html`, buildHtml(), "text/html");
+      if (f === "patch") download(`dualdiff-${stamp}.patch`, buildPatch(), "text/plain");
+      if (f === "json") download(`dualdiff-${stamp}.json`, JSON.stringify(buildJson(), null, 2), "application/json");
+      if (f === "md") download(`dualdiff-${stamp}.md`, buildMarkdown(), "text/markdown");
+      if (f === "csv") download(`dualdiff-${stamp}.csv`, buildCsv(), "text/csv");
+      if (f === "html") download(`dualdiff-${stamp}.html`, buildHtml(), "text/html");
     }
     $("exportModal")?.classList.remove("show");
     toast(`已导出 ${fmts.join(" · ")}`);
@@ -882,17 +928,6 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 
   // ---------- Directory pickers ----------
   async function pickDirectory(which) {
-    // Desktop (Electron) native folder dialog
-    if (window.dualdiffDesktop && window.dualdiffDesktop.pickDirectory) {
-      const result = await window.dualdiffDesktop.pickDirectory(which);
-      if (!result) return null;
-      return {
-        kind: "desktop",
-        name: result.name,
-        root: result.root,
-        files: result.files,
-      };
-    }
     // Prefer File System Access API
     if (window.showDirectoryPicker) {
       try {
@@ -923,45 +958,38 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     if (!picked) return;
     const side = state[which];
     side.name = picked.name;
-    if (picked.kind === "desktop") {
-      side.root = picked.root || picked.name;
-      const patterns = parseIgnorePatterns();
-      const list = (picked.files || []).filter((f) => !isIgnored(f.rel, patterns));
-      const contents = await window.dualdiffDesktop.readFiles(list.map((f) => f.path));
-      const map = new Map();
-      for (const f of list) {
-        const c = contents[f.path];
-        if (!c) continue;
-        let text = null;
-        let binary = !!c.binary;
-        let hash;
-        if (!binary && c.text != null) {
-          text = c.text;
-          hash = fnv1a(state.ignoreEol ? normalizeEol(text) : text);
-        } else {
-          binary = true;
-          hash = fnv1a(String(f.size) + f.rel);
-        }
-        map.set(f.rel, {
-          rel: f.rel,
-          name: f.name,
-          size: f.size,
-          text,
-          hash,
-          binary,
-          large: !!c.large,
-        });
-      }
-      side.files = map;
-    } else if (picked.kind === "fs") {
+    const patterns = parseIgnorePatterns();
+    if (picked.kind === "fs") {
       side.root = picked.name;
-      side.files = await scanDirectoryHandle(picked.handle, parseIgnorePatterns());
+      // fold project .gitignore if present at root
+      try {
+        const gi = await picked.handle.getFileHandle(".gitignore");
+        const txt = await (await gi.getFile()).text();
+        for (const p of parseGitignoreText(txt)) {
+          if (!patterns.includes(p)) patterns.push(p);
+        }
+        toast("已应用工程 .gitignore");
+      } catch {
+        /* no .gitignore */
+      }
+      side.files = await scanDirectoryHandle(picked.handle, patterns);
     } else {
       side.root = picked.name;
-      side.files = await hydrateMap(scanInputFiles(picked.files, parseIgnorePatterns()));
+      const list = picked.files || [];
+      const gi = list.find((f) => ((f.webkitRelativePath || f.name).split("/").pop() || "").toLowerCase() === ".gitignore");
+      if (gi) {
+        try {
+          for (const p of parseGitignoreText(await gi.text())) {
+            if (!patterns.includes(p)) patterns.push(p);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      side.files = await hydrateMap(scanInputFiles(list, patterns));
     }
     const pathEl = $(which === "a" ? "pathA" : "pathB");
-    if (pathEl) pathEl.textContent = `${picked.root ? picked.root : "/" + picked.name} · ${side.files.size} files`;
+    if (pathEl) pathEl.textContent = `/${picked.name} · ${side.files.size} files`;
     const labelEl = $(which === "a" ? "labelA" : "labelB");
     if (labelEl) labelEl.textContent = picked.name;
     toast(
@@ -1146,6 +1174,14 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       $("chkCase")?.classList.toggle("on", state.caseSensitive);
       if ($("chkCase")) $("chkCase").textContent = state.caseSensitive ? "✓" : "";
       renderTree();
+    });
+
+    $("codeOnly")?.addEventListener("click", () => {
+      state.codeOnly = !state.codeOnly;
+      $("chkCodeOnly")?.classList.toggle("on", state.codeOnly);
+      if ($("chkCodeOnly")) $("chkCodeOnly").textContent = state.codeOnly ? "✓" : "";
+      renderTree();
+      toast(state.codeOnly ? "已聚焦：仅代码文件" : "已显示：全部文件");
     });
 
     // project field hover cursor

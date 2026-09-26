@@ -14,6 +14,12 @@ const DEFAULT_IGNORES = new Set([
   "build",
   "out",
   "target",
+  "obj",
+  "bin",
+  "debug",
+  "release",
+  "x64",
+  "x86",
   "__pycache__",
   ".next",
   ".nuxt",
@@ -27,8 +33,9 @@ const DEFAULT_IGNORES = new Set([
 function shouldIgnore(rel) {
   const parts = rel.split(path.sep);
   for (const seg of parts) {
-    if (DEFAULT_IGNORES.has(seg)) return true;
-    if (seg.endsWith(".log") || seg.endsWith(".tmp")) return true;
+    const s = seg.toLowerCase();
+    if (DEFAULT_IGNORES.has(s)) return true;
+    if (s.endsWith(".log") || s.endsWith(".tmp") || s.endsWith(".user") || s.endsWith(".pdb")) return true;
   }
   return false;
 }
