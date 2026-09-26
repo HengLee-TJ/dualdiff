@@ -288,31 +288,142 @@
     return ops;
   }
 
-  function markWordHL(ops) {
-    // add simple word-level hl markers on del/add pairs for similar lines
-    for (let i = 0; i < ops.length; i++) {
-      const op = ops[i];
-      if (op.type === "del" && ops[i + 1] && ops[i + 1].type === "add") {
-        const a = op.aText || "";
-        const b = ops[i + 1].bText || "";
-        const aw = a.split(/(\s+)/);
-        const bw = b.split(/(\s+)/);
-        let ha = null;
-        let hb = null;
-        for (let k = 0; k < Math.min(aw.length, bw.length); k++) {
-          if (aw[k] !== bw[k] && aw[k].trim()) {
-            ha = aw[k];
-            hb = bw[k];
-            break;
-          }
-        }
-        if (ha) op.hlA = ha;
-        if (hb) ops[i + 1].hlB = hb;
-      } else if (op.type === "mod") {
-        // not used in LCS path
+  function tokenizeWords(s) {
+    return String(s ?? "").match(/\s+|[A-Za-z0-9_]+|[^\s\w]/g) || (s ? [s] : []);
+  }
+
+  /** Word LCS → highlight ONLY real differing segments. */
+  function wordDiffParts(aText, bText) {
+    const A = tokenizeWords(aText);
+    const B = tokenizeWords(bText);
+    const n = A.length;
+    const m = B.length;
+    if (!n && !m) return { a: [], b: [] };
+    if (n * m > 250000) {
+      // too big: mark full line
+      return {
+        a: [{ t: aText, ch: true }],
+        b: [{ t: bText, ch: true }],
+      };
+    }
+    const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
       }
     }
-    return ops;
+    const a = [];
+    const b = [];
+    let i = 0;
+    let j = 0;
+    const push = (arr, t, ch) => {
+      const last = arr[arr.length - 1];
+      if (last && last.ch === ch) last.t += t;
+      else arr.push({ t, ch });
+    };
+    while (i < n && j < m) {
+      if (A[i] === B[j]) {
+        push(a, A[i], false);
+        push(b, B[j], false);
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        push(a, A[i], true);
+        i++;
+      } else {
+        push(b, B[j], true);
+        j++;
+      }
+    }
+    while (i < n) {
+      push(a, A[i], true);
+      i++;
+    }
+    while (j < m) {
+      push(b, B[j], true);
+      j++;
+    }
+    return { a, b };
+  }
+
+  function partsHtml(parts) {
+    if (!parts || !parts.length) return "";
+    return parts
+      .map((p) => (p.ch ? `<span class="hl">${esc(p.t)}</span>` : esc(p.t)))
+      .join("");
+  }
+
+  function similarity(a, b) {
+    if (!a && !b) return 1;
+    const A = tokenizeWords(a);
+    const B = tokenizeWords(b);
+    const set = new Set(A);
+    let hit = 0;
+    for (const w of B) if (set.has(w)) hit++;
+    const denom = Math.max(A.length, B.length, 1);
+    return hit / denom;
+  }
+
+  /**
+   * Pair similar del/add lines into `mod` with true segment-level highlights,
+   * so pale red/green line bg + darker word HL map to the real edit.
+   */
+  function markWordHL(ops) {
+    const out = [];
+    let i = 0;
+    while (i < ops.length) {
+      const op = ops[i];
+      if (op.type === "del") {
+        // collect del run
+        const dels = [];
+        while (i < ops.length && ops[i].type === "del") {
+          dels.push(ops[i]);
+          i++;
+        }
+        const adds = [];
+        while (i < ops.length && ops[i].type === "add") {
+          adds.push(ops[i]);
+          i++;
+        }
+        const pairs = Math.min(dels.length, adds.length);
+        for (let k = 0; k < pairs; k++) {
+          const d = dels[k];
+          const ad = adds[k];
+          const sim = similarity(d.aText || "", ad.bText || "");
+          if (sim >= 0.45 || (d.aText || "").trim() === "" || (ad.bText || "").trim() === "") {
+            const parts = wordDiffParts(d.aText || "", ad.bText || "");
+            out.push({
+              type: "mod",
+              a: d.a,
+              b: ad.b,
+              aText: d.aText,
+              bText: ad.bText,
+              aParts: parts.a,
+              bParts: parts.b,
+            });
+          } else {
+            out.push({ ...d, aParts: [{ t: d.aText || "", ch: true }] });
+            out.push({ ...ad, bParts: [{ t: ad.bText || "", ch: true }] });
+          }
+        }
+        for (let k = pairs; k < dels.length; k++) {
+          out.push({ ...dels[k], aParts: [{ t: dels[k].aText || "", ch: true }] });
+        }
+        for (let k = pairs; k < adds.length; k++) {
+          out.push({ ...adds[k], bParts: [{ t: adds[k].bText || "", ch: true }] });
+        }
+        continue;
+      }
+      if (op.type === "add") {
+        // orphan add (no del run before)
+        out.push({ ...op, bParts: [{ t: op.bText || "", ch: true }] });
+        i++;
+        continue;
+      }
+      out.push({ ...op, aParts: [{ t: op.aText ?? "", ch: false }], bParts: [{ t: op.bText ?? "", ch: false }] });
+      i++;
+    }
+    return out;
   }
 
   function statsFromOps(ops) {
@@ -321,6 +432,10 @@
     for (const op of ops) {
       if (op.type === "add") add++;
       else if (op.type === "del") del++;
+      else if (op.type === "mod") {
+        add++;
+        del++;
+      }
     }
     return { add, del, changed: add + del };
   }
@@ -772,16 +887,23 @@
 
       const aEmpty = op.aText == null;
       const bEmpty = op.bText == null;
-      const aCls = aEmpty ? "blank" : op.type === "add" ? "blank" : op.type === "del" ? "del" : "ctx";
-      const bCls = bEmpty ? "blank" : op.type === "del" ? "blank" : op.type === "add" ? "add" : "ctx";
+      let aCls;
+      let bCls;
+      if (op.type === "mod") {
+        aCls = "mod";
+        bCls = "mod";
+      } else {
+        aCls = aEmpty ? "blank" : op.type === "add" ? "blank" : op.type === "del" ? "del" : "ctx";
+        bCls = bEmpty ? "blank" : op.type === "del" ? "blank" : op.type === "add" ? "add" : "ctx";
+      }
       left.push(
         `<div class="line ${aCls}${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">${
-          aEmpty ? "" : hlWord(op.aText, op.hlA)
+          aEmpty ? "" : hlWord(op.aText, op.hlA, op.aParts)
         }</span></div>`
       );
       right.push(
         `<div class="line ${bCls}${mark}"${changeAttr}><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">${
-          bEmpty ? "" : hlWord(op.bText, op.hlB)
+          bEmpty ? "" : hlWord(op.bText, op.hlB, op.bParts)
         }</span></div>`
       );
 
@@ -791,18 +913,35 @@
             op.aText ?? ""
           )}</span></div>`
         );
+      } else if (op.type === "mod") {
+        uni.push(
+          `<div class="line del${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">− ${hlWord(
+            op.aText ?? "",
+            op.hlA,
+            op.aParts
+          )}</span></div>`
+        );
+        uni.push(
+          `<div class="line add${mark}"${changeAttr}><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">+ ${hlWord(
+            op.bText ?? "",
+            op.hlB,
+            op.bParts
+          )}</span></div>`
+        );
       } else if (op.type === "del") {
         uni.push(
           `<div class="line del${mark}"${changeAttr}><span class="ln">${op.a != null ? op.a + 1 : ""}</span><span class="code">− ${hlWord(
             op.aText ?? "",
-            op.hlA
+            op.hlA,
+            op.aParts
           )}</span></div>`
         );
       } else if (op.type === "add") {
         uni.push(
           `<div class="line add${mark}"${changeAttr}><span class="ln">${op.b != null ? op.b + 1 : ""}</span><span class="code">+ ${hlWord(
             op.bText ?? "",
-            op.hlB
+            op.hlB,
+            op.bParts
           )}</span></div>`
         );
       }
@@ -821,24 +960,70 @@
       });
     });
 
+    bindSyncScroll();
     // auto-scroll to first (or current) change
     requestAnimationFrame(() => scrollToChange(state.changeCursor));
   }
 
+  let _scrollLock = false;
+
   function scrollToChange(idx) {
     const panes = [$("codeA"), $("codeB"), $("paneU")].filter(Boolean);
     const targetIdx = Math.max(0, idx);
-    let first = null;
     for (const pane of panes) {
       const el = pane.querySelector(`[data-change-idx="${targetIdx}"]`);
-      if (el) {
-        const top = el.offsetTop - pane.clientHeight * 0.25;
-        pane.scrollTop = Math.max(0, top);
-        el.classList.add("flash");
-        if (!first) first = el;
-        setTimeout(() => el.classList.remove("flash"), 900);
-      }
+      if (!el) continue;
+      const paneRect = pane.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const next = pane.scrollTop + (elRect.top - paneRect.top) - pane.clientHeight * 0.28;
+      pane.scrollTo({ top: Math.max(0, next), behavior: "auto" });
+      el.classList.remove("flash");
+      void el.offsetWidth;
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 1000);
     }
+    // force A/B sync after jump
+    const a = $("codeA");
+    const b = $("codeB");
+    if (a && b) {
+      _scrollLock = true;
+      b.scrollTop = a.scrollTop;
+      requestAnimationFrame(() => {
+        _scrollLock = false;
+      });
+    }
+  }
+
+  function bindSyncScroll() {
+    const a = $("codeA");
+    const b = $("codeB");
+    if (!a || !b || a._syncBound) return;
+    a._syncBound = true;
+    b._syncBound = true;
+    a.addEventListener(
+      "scroll",
+      () => {
+        if (_scrollLock) return;
+        _scrollLock = true;
+        b.scrollTop = a.scrollTop;
+        requestAnimationFrame(() => {
+          _scrollLock = false;
+        });
+      },
+      { passive: true }
+    );
+    b.addEventListener(
+      "scroll",
+      () => {
+        if (_scrollLock) return;
+        _scrollLock = true;
+        a.scrollTop = b.scrollTop;
+        requestAnimationFrame(() => {
+          _scrollLock = false;
+        });
+      },
+      { passive: true }
+    );
   }
 
   function gotoChange(delta) {
@@ -857,7 +1042,8 @@
     renderDiff();
   }
 
-  function hlWord(text, mark) {
+  function hlWord(text, mark, parts) {
+    if (parts && parts.length) return partsHtml(parts);
     const safe = esc(text);
     if (!mark) return safe;
     const m = esc(mark);
