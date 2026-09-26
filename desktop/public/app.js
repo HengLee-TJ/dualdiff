@@ -74,6 +74,7 @@
     caseSensitive: false,
     codeOnly: true,
     typeFilter: "all",
+    ignoreEncoding: true,
     collapseContext: true,
     contextLines: 3,
     changeCursor: 0,
@@ -125,6 +126,59 @@
 
   function normalizeEol(text) {
     return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  }
+
+  /**
+   * Decode bytes as UTF-8 / UTF-16 / GBK(GB18030) and strip BOM.
+   * Allows GBK vs UTF-8 copies of the same source to compare equal.
+   */
+  function decodeText(buf) {
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    // BOM
+    if (u8.length >= 3 && u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) {
+      return { text: new TextDecoder("utf-8").decode(u8.subarray(3)), enc: "utf-8-bom" };
+    }
+    if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) {
+      return { text: new TextDecoder("utf-16le").decode(u8.subarray(2)), enc: "utf-16le" };
+    }
+    if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) {
+      return { text: new TextDecoder("utf-16be").decode(u8.subarray(2)), enc: "utf-16be" };
+    }
+    // strict UTF-8 check
+    try {
+      const dec = new TextDecoder("utf-8", { fatal: true });
+      return { text: dec.decode(u8), enc: "utf-8" };
+    } catch {
+      /* not utf-8 */
+    }
+    // GBK / GB18030 (Chrome / Edge / Electron)
+    try {
+      return { text: new TextDecoder("gb18030").decode(u8), enc: "gb18030" };
+    } catch {
+      try {
+        return { text: new TextDecoder("gbk").decode(u8), enc: "gbk" };
+      } catch {
+        /* fall through */
+      }
+    }
+    // last resort lossy utf-8
+    return { text: new TextDecoder("utf-8", { fatal: false }).decode(u8), enc: "utf-8-lossy" };
+  }
+
+  /** Content key used for equality — encoding-normalized. */
+  function contentKey(text) {
+    let s = text;
+    if (state.ignoreEncoding !== false) {
+      // NFC + strip BOM char + EOL normalize
+      s = s.replace(/^﻿/, "");
+      try {
+        s = s.normalize("NFC");
+      } catch {
+        /* ignore */
+      }
+    }
+    if (state.ignoreEol) s = normalizeEol(s);
+    return s;
   }
 
   function splitLines(text) {
@@ -531,14 +585,16 @@
       });
       return;
     }
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+    const decoded = decodeText(buf);
+    const text = decoded.text;
     map.set(rel, {
       rel,
       size: file.size,
       binary: false,
       large: false,
       text,
-      hash: fnv1a(state.ignoreEol ? normalizeEol(text) : text),
+      enc: decoded.enc,
+      hash: fnv1a(contentKey(text)),
       name: rel.split("/").pop(),
     });
   }
@@ -600,8 +656,8 @@
         entry.hash = fnv1a(String(entry.size) + entry.rel + buf.subarray(0, 64).join(","));
         continue;
       }
-      entry.text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
-      entry.hash = fnv1a(state.ignoreEol ? normalizeEol(entry.text) : entry.text);
+      entry.text = decodeText(buf).text;
+      entry.hash = fnv1a(contentKey(entry.text));
     }
     return map;
   }
@@ -1428,7 +1484,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
           name: rel.split("/").pop(),
           size: text.length,
           text,
-          hash: fnv1a(state.ignoreEol ? normalizeEol(text) : text),
+          hash: fnv1a(contentKey(text)),
           binary: false,
           large: false,
         });

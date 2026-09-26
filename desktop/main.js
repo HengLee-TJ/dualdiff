@@ -40,6 +40,34 @@ function shouldIgnore(rel) {
   return false;
 }
 
+/** UTF-8 / UTF-16 / GBK decode + BOM strip so encoding copies compare equal. */
+function decodeBuffer(buf) {
+  const u8 = buf;
+  if (u8.length >= 3 && u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) {
+    return new TextDecoder("utf-8").decode(u8.subarray(3));
+  }
+  if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(u8.subarray(2));
+  }
+  if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(u8.subarray(2));
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(u8);
+  } catch {
+    /* not utf-8 */
+  }
+  try {
+    return new TextDecoder("gb18030").decode(u8);
+  } catch {
+    try {
+      return new TextDecoder("gbk").decode(u8);
+    } catch {
+      return new TextDecoder("utf-8", { fatal: false }).decode(u8);
+    }
+  }
+}
+
 async function scanDir(root) {
   const files = new Map();
   async function walk(dir, relBase) {
@@ -188,11 +216,12 @@ ipcMain.handle("dualdiff:readFiles", async (event, paths) => {
       if (isBin || (n && suspicious / n > 0.15)) {
         out[p] = { size: st.size, binary: true, large: false, text: null };
       } else {
+        const text = decodeBuffer(buf);
         out[p] = {
           size: st.size,
           binary: false,
           large: false,
-          text: buf.toString("utf8"),
+          text,
         };
       }
     } catch {
