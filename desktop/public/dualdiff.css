@@ -226,11 +226,14 @@ button { cursor: pointer; border: none; background: none; }
 }
 .search-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+  align-items: center;
 }
 .search-box {
-  flex: 1;
+  flex: 1 1 140px;
+  min-width: 0;
   height: 38px;
   display: flex;
   align-items: center;
@@ -242,6 +245,7 @@ button { cursor: pointer; border: none; background: none; }
 }
 .search-box input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;
@@ -260,6 +264,8 @@ button { cursor: pointer; border: none; background: none; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .filter-chips {

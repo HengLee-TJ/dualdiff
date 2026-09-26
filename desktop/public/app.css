@@ -316,6 +316,7 @@
 .dropdown-wrap {
   position: relative;
   flex-shrink: 0;
+  max-width: 100%;
 }
 .dropdown {
   height: 38px;
@@ -329,7 +330,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 96px;
+  min-width: 118px;
+  max-width: 100%;
+  white-space: nowrap;
+  flex-shrink: 0;
   justify-content: space-between;
 }
 .dropdown:hover {
