@@ -967,25 +967,34 @@
 
   let _scrollLock = false;
 
+  /** Actual scroll host: code pane itself, or parent .diff-col fallback. */
+  function scrollHost(pane) {
+    if (!pane) return null;
+    const cs = getComputedStyle(pane);
+    if (cs.overflowY === "auto" || cs.overflowY === "scroll") return pane;
+    return pane.parentElement || pane;
+  }
+
   function scrollToChange(idx) {
     const panes = [$("codeA"), $("codeB"), $("paneU")].filter(Boolean);
     const targetIdx = Math.max(0, idx);
     for (const pane of panes) {
       const el = pane.querySelector(`[data-change-idx="${targetIdx}"]`);
       if (!el) continue;
-      const paneRect = pane.getBoundingClientRect();
+      const host = scrollHost(pane);
+      const hostRect = host.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
-      const next = pane.scrollTop + (elRect.top - paneRect.top) - pane.clientHeight * 0.28;
-      pane.scrollTo({ top: Math.max(0, next), behavior: "auto" });
+      const next = host.scrollTop + (elRect.top - hostRect.top) - host.clientHeight * 0.28;
+      host.scrollTop = Math.max(0, next);
       el.classList.remove("flash");
       void el.offsetWidth;
       el.classList.add("flash");
       setTimeout(() => el.classList.remove("flash"), 1000);
     }
     // force A/B sync after jump
-    const a = $("codeA");
-    const b = $("codeB");
-    if (a && b) {
+    const a = scrollHost($("codeA"));
+    const b = scrollHost($("codeB"));
+    if (a && b && a !== b) {
       _scrollLock = true;
       b.scrollTop = a.scrollTop;
       requestAnimationFrame(() => {
@@ -995,35 +1004,25 @@
   }
 
   function bindSyncScroll() {
-    const a = $("codeA");
-    const b = $("codeB");
-    if (!a || !b || a._syncBound) return;
+    const paneA = $("codeA");
+    const paneB = $("codeB");
+    if (!paneA || !paneB) return;
+    const a = scrollHost(paneA);
+    const b = scrollHost(paneB);
+    if (!a || !b || a === b || a._syncBound) return;
     a._syncBound = true;
     b._syncBound = true;
-    a.addEventListener(
-      "scroll",
-      () => {
-        if (_scrollLock) return;
-        _scrollLock = true;
-        b.scrollTop = a.scrollTop;
-        requestAnimationFrame(() => {
-          _scrollLock = false;
-        });
-      },
-      { passive: true }
-    );
-    b.addEventListener(
-      "scroll",
-      () => {
-        if (_scrollLock) return;
-        _scrollLock = true;
-        a.scrollTop = b.scrollTop;
-        requestAnimationFrame(() => {
-          _scrollLock = false;
-        });
-      },
-      { passive: true }
-    );
+    const onScroll = (src, dst) => () => {
+      if (_scrollLock) return;
+      _scrollLock = true;
+      dst.scrollTop = src.scrollTop;
+      dst.scrollLeft = src.scrollLeft;
+      requestAnimationFrame(() => {
+        _scrollLock = false;
+      });
+    };
+    a.addEventListener("scroll", onScroll(a, b), { passive: true });
+    b.addEventListener("scroll", onScroll(b, a), { passive: true });
   }
 
   function gotoChange(delta) {
