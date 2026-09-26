@@ -1461,7 +1461,11 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     if (btn) btn.disabled = !ready;
   }
 
-  async function runCompare() {
+  async function runCompare(opts) {
+    const options = opts || {};
+    const preserveSelection = !!options.preserveSelection;
+    const prevPath = state.activePath;
+    const prevCursor = state.changeCursor;
     if (!state.a.files.size || !state.b.files.size) {
       toast("请先选择两个工程目录");
       return;
@@ -1469,19 +1473,28 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     state.scanning = true;
     const scanState = $("scanState");
     if (scanState) scanState.textContent = "Scanning…";
-    // yield UI
     await new Promise((r) => setTimeout(r, 30));
     compareMaps();
-    // pick first changed
-    const first =
-      state.results.find((r) => r.status === "modified") ||
-      state.results.find((r) => r.status !== "same") ||
-      state.results[0];
-    state.activePath = first ? first.path : null;
+
+    if (preserveSelection) {
+      const still = state.results.find((r) => r.path === prevPath);
+      state.activePath = still ? prevPath : (state.results[0] && state.results[0].path) || null;
+      state.changeCursor = still ? prevCursor : 0;
+    } else {
+      const first =
+        state.results.find((r) => r.status === "modified") ||
+        state.results.find((r) => r.status !== "same") ||
+        state.results[0];
+      state.activePath = first ? first.path : null;
+      state.changeCursor = 0;
+    }
+
     state.scanning = false;
     if (scanState) scanState.textContent = "Scan completed";
     renderAll();
-    toast(`对比完成 · ${state.results.length} 文件`);
+    if (!preserveSelection) {
+      toast(`对比完成 · ${state.results.length} 文件`);
+    }
   }
 
   async function swapProjects() {
@@ -1696,12 +1709,16 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     $("ignoreComment")?.addEventListener("click", () => {
       state.ignoreComment = !state.ignoreComment;
       $("ignoreComment")?.classList.toggle("on", state.ignoreComment);
-      if (state.a.files.size && state.b.files.size) runCompare();
+      if (state.a.files.size && state.b.files.size) {
+        runCompare({ preserveSelection: true });
+      }
     });
     $("ignoreFormat")?.addEventListener("click", () => {
       state.ignoreFormat = !state.ignoreFormat;
       $("ignoreFormat")?.classList.toggle("on", state.ignoreFormat);
-      if (state.a.files.size && state.b.files.size) runCompare();
+      if (state.a.files.size && state.b.files.size) {
+        runCompare({ preserveSelection: true });
+      }
     });
 
     $("codeOnly")?.addEventListener("click", () => {
