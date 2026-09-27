@@ -22,3 +22,6 @@ Thumbs.db
 assets/_wm_*
 assets/chk_*
 assets/VERIFY_*
+tauri-app/src-tauri/target/
+tauri-app/node_modules/
+*.exe

@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "DualDiff",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:default"
+  ]
+}

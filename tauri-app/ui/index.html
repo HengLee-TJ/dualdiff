@@ -1,0 +1,295 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DualDiff</title>
+  <link rel="stylesheet" href="dualdiff.css" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="4" width="8" height="16" rx="2" stroke="white" stroke-width="1.8"/>
+          <rect x="13" y="4" width="8" height="16" rx="2" stroke="white" stroke-width="1.8" opacity="0.7"/>
+          <path d="M5.5 9h3M5.5 12h3M15.5 11h3M15.5 14h3" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-name">DualDiff</div>
+      <div class="brand-tag" data-i18n="app.tag">鏈湴瀵规瘮 路 涓嶄笂浼犱唬鐮?/div>
+    </div>
+
+    <div class="proj-field clickable" id="fieldA">
+      <div class="label"><span class="ico">A</span> <span id="labelA" data-i18n="proj.a">Project A</span></div>
+      <div class="row">
+        <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5H19.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V7.5Z" stroke="#7a8797" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        <div class="path" id="pathA" data-i18n="path.a">鐐瑰嚮閫夋嫨宸ョ▼鐩綍 A</div>
+        <button class="browse" id="pickA" type="button" data-i18n="browse">娴忚鈥?/button>
+      </div>
+    </div>
+
+    <button class="swap-btn" id="swapBtn" type="button" data-i18n-title="swap">
+      <svg class="icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3-3m-3 3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <div class="proj-field clickable" id="fieldB">
+      <div class="label"><span class="ico">B</span> <span id="labelB" data-i18n="proj.b">Project B</span></div>
+      <div class="row">
+        <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5H19.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V7.5Z" stroke="#7a8797" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        <div class="path" id="pathB" data-i18n="path.b">鐐瑰嚮閫夋嫨宸ョ▼鐩綍 B</div>
+        <button class="browse" id="pickB" type="button" data-i18n="browse">娴忚鈥?/button>
+      </div>
+    </div>
+
+    <button class="btn-export secondary" id="exportBtn" type="button">
+      <svg class="icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 15.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span data-i18n="export">Export report</span>
+    </button>
+
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button type="button" class="lang-btn" data-set-lang="zh">涓?/button>
+      <button type="button" class="lang-btn" data-set-lang="en">EN</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="panel">
+      <div class="left-top">
+        <div class="search-row">
+          <div class="search-box">
+            <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" stroke="#8b97a5" stroke-width="1.7"/>
+              <path d="m16 16 4 4" stroke="#8b97a5" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+            <input id="searchInput" data-i18n-placeholder="search" placeholder="鎼滅储鏂囦欢鈥? />
+          </div>
+          <div class="dropdown-wrap">
+            <button class="dropdown" id="typeFilterBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span id="typeFilterLabel" data-i18n="type.all">鍏ㄩ儴绫诲瀷</span>
+              <span class="caret">鈻?/span>
+            </button>
+            <ul class="dropdown-menu" id="typeFilterMenu" role="listbox" hidden>
+              <li role="option" data-type="all" class="on" data-i18n="type.all">鍏ㄩ儴绫诲瀷</li>
+              <li role="option" data-type="code" data-i18n="type.code">浠ｇ爜鏂囦欢</li>
+              <li role="option" data-type="config" data-i18n="type.config">閰嶇疆鏂囦欢</li>
+              <li role="option" data-type="docs" data-i18n="type.docs">鏂囨。</li>
+              <li role="option" data-type="other" data-i18n="type.other">鍏朵粬</li>
+            </ul>
+          </div>
+        </div>
+        <div class="filter-chips" id="filterChips">
+          <button class="chip on" data-f="all" type="button">
+            <span class="dot" style="background:var(--blue)"></span><span data-i18n="filter.all">鍏ㄩ儴</span> <span class="num" id="nAll">0</span>
+          </button>
+          <button class="chip" data-f="modified" type="button">
+            <span class="dot modified"></span><span data-i18n="filter.modified">鏀?/span> <span class="num" id="nMod">0</span>
+          </button>
+          <button class="chip" data-f="added" type="button">
+            <span class="dot added"></span><span data-i18n="filter.added">澧?/span> <span class="num" id="nAdd">0</span>
+          </button>
+          <button class="chip" data-f="deleted" type="button">
+            <span class="dot deleted"></span><span data-i18n="filter.deleted">鍒?/span> <span class="num" id="nDel">0</span>
+          </button>
+        </div>
+        <div class="filter-chips compact" id="optFilters">
+          <button class="chip on" id="codeOnly" type="button" title="Code files only">
+            <span data-i18n="code.only">浠呬唬鐮?/span>
+          </button>
+          <button class="chip on" id="hideUnchanged" type="button" title="Hide unchanged">
+            <span data-i18n="hide.same">闅愯棌鐩稿悓</span>
+          </button>
+          <button class="chip" id="caseSens" type="button" title="Case sensitive">Aa</button>
+          <button class="chip" id="ignoreComment" type="button" title="Ignore comment-only">
+            <span>蹇界暐娉ㄩ噴</span>
+          </button>
+          <button class="chip" id="ignoreFormat" type="button" title="Ignore format-only">
+            <span>蹇界暐鏍煎紡</span>
+          </button>
+        </div>
+      </div>
+      <div class="tree-head" data-i18n="tree">FILE TREE</div>
+      <div class="file-tree" id="fileTree"></div>
+    </aside>
+
+    <section class="panel center-panel">
+      <div class="diff-toolbar">
+        <div class="diff-path">
+          <div class="path" id="diffPath" style="font-family:var(--mono);font-size:13px;font-weight:650">鈥?/div>
+        </div>
+        <div class="seg" id="viewSeg">
+          <button class="on" data-view="split" type="button" data-i18n="split">骞舵帓</button>
+          <button data-view="unified" type="button" data-i18n="unified">缁熶竴</button>
+        </div>
+        <div class="change-nav" title="蹇嵎閿?N / P 鎴?J / K">
+          <button class="icon-btn" id="foldToggle" type="button" title="鎶樺彔鏈彉鏇?>
+            <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 4l-3 4 3 4M16 12l3 4-3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/></svg>
+          </button>
+          <button class="icon-btn" id="prevChange" type="button" title="涓婁竴澶勬敼鍔?>
+            <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <span class="change-info" id="changeInfo">0</span>
+          <button class="icon-btn" id="nextChange" type="button" title="涓嬩竴澶勬敼鍔?>
+            <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 10l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <button class="icon-btn" id="copyBtn" type="button" data-i18n-title="copy">
+          <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="8" y="8" width="11" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M16 8V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="statsToggle" type="button" data-i18n-title="stats" title="缁熻">
+          <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 19V10M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="empty-state show" id="emptyState">
+        <div class="empty-card">
+          <div class="empty-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="4" width="8" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="13" y="4" width="8" height="16" rx="2" stroke="currentColor" stroke-width="1.7" opacity="0.55"/>
+              <path d="M5.5 9h3M5.5 12h3M15.5 11h3M15.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h2 data-i18n="empty.title">瀵规瘮涓や釜宸ョ▼</h2>
+          <p data-i18n="empty.desc">閫夋嫨宸ョ▼ A锛堝熀鍑嗭級涓庡伐绋?B锛堝鐓э級鈥?/p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button class="btn-primary" id="demoBtn" type="button" data-i18n="demo">鍔犺浇绀轰緥鏁版嵁</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="diffContent" class="diff-content">
+        <div class="diff-tabs">
+          <div class="diff-tab">
+            <span class="status-dot"></span>
+            <span class="title" id="tabA">鈥?/span>
+          </div>
+          <div class="diff-tab">
+            <span class="status-dot"></span>
+            <span class="title" id="tabB">鈥?/span>
+          </div>
+        </div>
+        <div class="diff-sub">
+          <span data-i18n="a.base">Project A 路 鍩哄噯</span>
+          <span data-i18n="b.base">Project B 路 瀵圭収</span>
+        </div>
+        <div class="side-by-side" id="sideBySide">
+          <div class="diff-col"><div class="code-pane" id="codeA"></div></div>
+          <div class="diff-col"><div class="code-pane" id="codeB"></div></div>
+        </div>
+        <div class="side-by-side" id="unifiedView" style="display:none">
+          <div class="diff-col" style="grid-column:1/-1;border-right:none">
+            <div class="code-pane" id="paneU"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="right-inner">
+        <div class="panel-label" data-i18n="metrics">METRICS</div>
+        <div class="metric-grid">
+          <div class="metric modified">
+            <div class="k" data-i18n="m.modified">Modified</div>
+            <div class="v" id="mMod">0</div>
+            <div class="u" data-i18n="m.files">files</div>
+          </div>
+          <div class="metric added">
+            <div class="k" data-i18n="m.added">Added</div>
+            <div class="v" id="mAdd">0</div>
+            <div class="u" data-i18n="m.files">files</div>
+          </div>
+          <div class="metric deleted">
+            <div class="k" data-i18n="m.deleted">Deleted</div>
+            <div class="v" id="mDel">0</div>
+            <div class="u" data-i18n="m.files">files</div>
+          </div>
+          <div class="metric total">
+            <div class="k" data-i18n="m.total">Total</div>
+            <div class="v" id="mTotal">0</div>
+            <div class="u" data-i18n="m.files">files</div>
+          </div>
+        </div>
+
+        <div class="lines-rows">
+          <div class="line-stat"><span class="k" data-i18n="l.changed">Lines changed</span><span class="v" id="lMod">0</span></div>
+          <div class="line-stat"><span class="k" data-i18n="l.added">Lines added</span><span class="v g" id="lAdd">0</span></div>
+          <div class="line-stat"><span class="k" data-i18n="l.deleted">Lines deleted</span><span class="v r" id="lDel">0</span></div>
+        </div>
+
+        <div class="stat-block" style="padding:8px 0 0">
+          <div class="panel-label" data-i18n="hot">HOT DIRECTORIES</div>
+          <div class="bar-list" id="hotDirs"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <span class="ok" id="scanState" data-i18n="ready">灏辩华</span>
+    <span class="dot-sep"></span>
+    <span id="statusFiles">0 files compared</span>
+    <span class="dot-sep"></span>
+    <span id="statusLines">0 lines changed</span>
+    <div class="right">
+      <a href="prd.html" id="prdLink" data-open-prd style="color:var(--blue);text-decoration:none;font-weight:650" data-i18n="prd">PRD 鏂囨。</a>
+      <span style="margin-left:10px">UTF-8 路 local only</span>
+    </div>
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="exportModal">
+  <div class="modal">
+    <h3 data-i18n="export.title">瀵煎嚭鎶ュ憡</h3>
+    <div class="body">
+      <p data-i18n="export.desc">灏嗗姣旂粨鏋滃鍑哄埌鏈湴锛堜笉涓婁紶锛夈€?/p>
+      <div style="margin-top:14px;display:grid;gap:8px">
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
+          <input type="checkbox" checked data-fmt="patch" /> .patch 鈥?<span data-i18n="export.patch">unified diff</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
+          <input type="checkbox" checked data-fmt="json" /> JSON 鈥?<span data-i18n="export.json">structured report</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
+          <input type="checkbox" data-fmt="md" /> Markdown 鈥?<span data-i18n="export.md">summary</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
+          <input type="checkbox" data-fmt="csv" /> CSV 鈥?<span data-i18n="export.csv">inventory</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
+          <input type="checkbox" data-fmt="html" /> HTML 鈥?<span data-i18n="export.html">shareable</span>
+        </label>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="btn btn-ghost" id="cancelExport" type="button" data-i18n="cancel">鍙栨秷</button>
+      <button class="btn btn-primary" id="confirmExport" type="button" data-i18n="ok">瀵煎嚭</button>
+    </div>
+  </div>
+</div>
+
+<script src="tauri-bridge.js"></script>
+<script src="i18n.js"></script>
+<script src="classify.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+
