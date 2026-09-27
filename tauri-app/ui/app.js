@@ -1361,7 +1361,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function doExport() {
+  async function doExport() {
     const fmts = [...document.querySelectorAll("[data-fmt]")].filter((x) => x.checked).map((x) => x.getAttribute("data-fmt"));
     if (!fmts.length) {
       toast("请选择至少一种导出格式");
@@ -1373,11 +1373,11 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     }
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     for (const f of fmts) {
-      if (f === "patch") download(`dualdiff-${stamp}.patch`, buildPatch(), "text/plain");
-      if (f === "json") download(`dualdiff-${stamp}.json`, JSON.stringify(buildJson(), null, 2), "application/json");
-      if (f === "md") download(`dualdiff-${stamp}.md`, buildMarkdown(), "text/markdown");
-      if (f === "csv") download(`dualdiff-${stamp}.csv`, buildCsv(), "text/csv");
-      if (f === "html") download(`dualdiff-${stamp}.html`, buildHtml(), "text/html");
+      if (f === "patch") await download(`dualdiff-${stamp}.patch`, buildPatch(), "text/plain");
+      if (f === "json") await download(`dualdiff-${stamp}.json`, JSON.stringify(buildJson(), null, 2), "application/json");
+      if (f === "md") await download(`dualdiff-${stamp}.md`, buildMarkdown(), "text/markdown");
+      if (f === "csv") await download(`dualdiff-${stamp}.csv`, buildCsv(), "text/csv");
+      if (f === "html") await download(`dualdiff-${stamp}.html`, buildHtml(), "text/html");
     }
     $("exportModal")?.classList.remove("show");
     toast(`已导出 ${fmts.join(" · ")}`);
@@ -1385,7 +1385,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 
   // ---------- Directory pickers ----------
   async function pickDirectory(which) {
-    // Tauri desktop
+    // Tauri desktop shell
     if (window.DualDiffTauri && window.DualDiffTauri.isTauri && window.DualDiffTauri.isTauri()) {
       const result = await window.DualDiffTauri.pickDirectory(which);
       if (!result) return null;

@@ -1,0 +1,49 @@
+/* Tauri WebView layout/encoding tweaks */
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #ebeff4;
+}
+
+.app {
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.workspace {
+  height: 100%;
+  min-height: 0;
+}
+
+.panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* keep one physical line per code row; scroll horizontally instead of wrap */
+.line .code {
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+.code-pane,
+.code-col {
+  overflow-x: auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.side-by-side {
+  min-height: 0;
+}
+
+.topbar,
+.statusbar {
+  flex-shrink: 0;
+}

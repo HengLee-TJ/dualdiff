@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -6,6 +6,7 @@
   <title>DualDiff</title>
   <link rel="stylesheet" href="dualdiff.css" />
   <link rel="stylesheet" href="app.css" />
+  <link rel="stylesheet" href="tauri-tweaks.css" />
 </head>
 <body>
 <div class="app">
@@ -19,7 +20,7 @@
         </svg>
       </div>
       <div class="brand-name">DualDiff</div>
-      <div class="brand-tag" data-i18n="app.tag">鏈湴瀵规瘮 路 涓嶄笂浼犱唬鐮?/div>
+      <div class="brand-tag" data-i18n="app.tag">本地对比 · 不上传代码</div>
     </div>
 
     <div class="proj-field clickable" id="fieldA">
@@ -28,8 +29,8 @@
         <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5H19.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V7.5Z" stroke="#7a8797" stroke-width="1.6" stroke-linejoin="round"/>
         </svg>
-        <div class="path" id="pathA" data-i18n="path.a">鐐瑰嚮閫夋嫨宸ョ▼鐩綍 A</div>
-        <button class="browse" id="pickA" type="button" data-i18n="browse">娴忚鈥?/button>
+        <div class="path" id="pathA" data-i18n="path.a">点击选择工程目录 A</div>
+        <button class="browse" id="pickA" type="button" data-i18n="browse">浏览…</button>
       </div>
     </div>
 
@@ -45,8 +46,8 @@
         <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5H19.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V7.5Z" stroke="#7a8797" stroke-width="1.6" stroke-linejoin="round"/>
         </svg>
-        <div class="path" id="pathB" data-i18n="path.b">鐐瑰嚮閫夋嫨宸ョ▼鐩綍 B</div>
-        <button class="browse" id="pickB" type="button" data-i18n="browse">娴忚鈥?/button>
+        <div class="path" id="pathB" data-i18n="path.b">点击选择工程目录 B</div>
+        <button class="browse" id="pickB" type="button" data-i18n="browse">浏览…</button>
       </div>
     </div>
 
@@ -59,7 +60,7 @@
     </button>
 
     <div class="lang-switch" role="group" aria-label="Language">
-      <button type="button" class="lang-btn" data-set-lang="zh">涓?/button>
+      <button type="button" class="lang-btn" data-set-lang="zh">中</button>
       <button type="button" class="lang-btn" data-set-lang="en">EN</button>
     </div>
   </header>
@@ -73,49 +74,49 @@
               <circle cx="11" cy="11" r="6.5" stroke="#8b97a5" stroke-width="1.7"/>
               <path d="m16 16 4 4" stroke="#8b97a5" stroke-width="1.7" stroke-linecap="round"/>
             </svg>
-            <input id="searchInput" data-i18n-placeholder="search" placeholder="鎼滅储鏂囦欢鈥? />
+            <input id="searchInput" data-i18n-placeholder="search" placeholder="搜索文件…" />
           </div>
           <div class="dropdown-wrap">
             <button class="dropdown" id="typeFilterBtn" type="button" aria-haspopup="listbox" aria-expanded="false">
-              <span id="typeFilterLabel" data-i18n="type.all">鍏ㄩ儴绫诲瀷</span>
-              <span class="caret">鈻?/span>
+              <span id="typeFilterLabel" data-i18n="type.all">全部类型</span>
+              <span class="caret">▾</span>
             </button>
             <ul class="dropdown-menu" id="typeFilterMenu" role="listbox" hidden>
-              <li role="option" data-type="all" class="on" data-i18n="type.all">鍏ㄩ儴绫诲瀷</li>
-              <li role="option" data-type="code" data-i18n="type.code">浠ｇ爜鏂囦欢</li>
-              <li role="option" data-type="config" data-i18n="type.config">閰嶇疆鏂囦欢</li>
-              <li role="option" data-type="docs" data-i18n="type.docs">鏂囨。</li>
-              <li role="option" data-type="other" data-i18n="type.other">鍏朵粬</li>
+              <li role="option" data-type="all" class="on" data-i18n="type.all">全部类型</li>
+              <li role="option" data-type="code" data-i18n="type.code">代码文件</li>
+              <li role="option" data-type="config" data-i18n="type.config">配置文件</li>
+              <li role="option" data-type="docs" data-i18n="type.docs">文档</li>
+              <li role="option" data-type="other" data-i18n="type.other">其他</li>
             </ul>
           </div>
         </div>
         <div class="filter-chips" id="filterChips">
           <button class="chip on" data-f="all" type="button">
-            <span class="dot" style="background:var(--blue)"></span><span data-i18n="filter.all">鍏ㄩ儴</span> <span class="num" id="nAll">0</span>
+            <span class="dot" style="background:var(--blue)"></span><span data-i18n="filter.all">全部</span> <span class="num" id="nAll">0</span>
           </button>
           <button class="chip" data-f="modified" type="button">
-            <span class="dot modified"></span><span data-i18n="filter.modified">鏀?/span> <span class="num" id="nMod">0</span>
+            <span class="dot modified"></span><span data-i18n="filter.modified">改</span> <span class="num" id="nMod">0</span>
           </button>
           <button class="chip" data-f="added" type="button">
-            <span class="dot added"></span><span data-i18n="filter.added">澧?/span> <span class="num" id="nAdd">0</span>
+            <span class="dot added"></span><span data-i18n="filter.added">增</span> <span class="num" id="nAdd">0</span>
           </button>
           <button class="chip" data-f="deleted" type="button">
-            <span class="dot deleted"></span><span data-i18n="filter.deleted">鍒?/span> <span class="num" id="nDel">0</span>
+            <span class="dot deleted"></span><span data-i18n="filter.deleted">删</span> <span class="num" id="nDel">0</span>
           </button>
         </div>
         <div class="filter-chips compact" id="optFilters">
           <button class="chip on" id="codeOnly" type="button" title="Code files only">
-            <span data-i18n="code.only">浠呬唬鐮?/span>
+            <span data-i18n="code.only">仅代码</span>
           </button>
           <button class="chip on" id="hideUnchanged" type="button" title="Hide unchanged">
-            <span data-i18n="hide.same">闅愯棌鐩稿悓</span>
+            <span data-i18n="hide.same">隐藏相同</span>
           </button>
           <button class="chip" id="caseSens" type="button" title="Case sensitive">Aa</button>
           <button class="chip" id="ignoreComment" type="button" title="Ignore comment-only">
-            <span>蹇界暐娉ㄩ噴</span>
+            <span>忽略注释</span>
           </button>
           <button class="chip" id="ignoreFormat" type="button" title="Ignore format-only">
-            <span>蹇界暐鏍煎紡</span>
+            <span>忽略格式</span>
           </button>
         </div>
       </div>
@@ -126,21 +127,21 @@
     <section class="panel center-panel">
       <div class="diff-toolbar">
         <div class="diff-path">
-          <div class="path" id="diffPath" style="font-family:var(--mono);font-size:13px;font-weight:650">鈥?/div>
+          <div class="path" id="diffPath" style="font-family:var(--mono);font-size:13px;font-weight:650">—</div>
         </div>
         <div class="seg" id="viewSeg">
-          <button class="on" data-view="split" type="button" data-i18n="split">骞舵帓</button>
-          <button data-view="unified" type="button" data-i18n="unified">缁熶竴</button>
+          <button class="on" data-view="split" type="button" data-i18n="split">并排</button>
+          <button data-view="unified" type="button" data-i18n="unified">统一</button>
         </div>
-        <div class="change-nav" title="蹇嵎閿?N / P 鎴?J / K">
-          <button class="icon-btn" id="foldToggle" type="button" title="鎶樺彔鏈彉鏇?>
+        <div class="change-nav" title="快捷键 N / P 或 J / K">
+          <button class="icon-btn" id="foldToggle" type="button" title="折叠未变更">
             <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 4l-3 4 3 4M16 12l3 4-3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/></svg>
           </button>
-          <button class="icon-btn" id="prevChange" type="button" title="涓婁竴澶勬敼鍔?>
+          <button class="icon-btn" id="prevChange" type="button" title="上一处改动">
             <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <span class="change-info" id="changeInfo">0</span>
-          <button class="icon-btn" id="nextChange" type="button" title="涓嬩竴澶勬敼鍔?>
+          <button class="icon-btn" id="nextChange" type="button" title="下一处改动">
             <svg class="icon-svg" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 10l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -150,7 +151,7 @@
             <path d="M16 8V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.7"/>
           </svg>
         </button>
-        <button class="icon-btn" id="statsToggle" type="button" data-i18n-title="stats" title="缁熻">
+        <button class="icon-btn" id="statsToggle" type="button" data-i18n-title="stats" title="统计">
           <svg class="icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M5 19V10M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           </svg>
@@ -166,10 +167,10 @@
               <path d="M5.5 9h3M5.5 12h3M15.5 11h3M15.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <h2 data-i18n="empty.title">瀵规瘮涓や釜宸ョ▼</h2>
-          <p data-i18n="empty.desc">閫夋嫨宸ョ▼ A锛堝熀鍑嗭級涓庡伐绋?B锛堝鐓э級鈥?/p>
+          <h2 data-i18n="empty.title">对比两个工程</h2>
+          <p data-i18n="empty.desc">选择工程 A（基准）与工程 B（对照）…</p>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <button class="btn-primary" id="demoBtn" type="button" data-i18n="demo">鍔犺浇绀轰緥鏁版嵁</button>
+            <button class="btn-primary" id="demoBtn" type="button" data-i18n="demo">加载示例数据</button>
           </div>
         </div>
       </div>
@@ -178,16 +179,16 @@
         <div class="diff-tabs">
           <div class="diff-tab">
             <span class="status-dot"></span>
-            <span class="title" id="tabA">鈥?/span>
+            <span class="title" id="tabA">—</span>
           </div>
           <div class="diff-tab">
             <span class="status-dot"></span>
-            <span class="title" id="tabB">鈥?/span>
+            <span class="title" id="tabB">—</span>
           </div>
         </div>
         <div class="diff-sub">
-          <span data-i18n="a.base">Project A 路 鍩哄噯</span>
-          <span data-i18n="b.base">Project B 路 瀵圭収</span>
+          <span data-i18n="a.base">Project A · 基准</span>
+          <span data-i18n="b.base">Project B · 对照</span>
         </div>
         <div class="side-by-side" id="sideBySide">
           <div class="diff-col"><div class="code-pane" id="codeA"></div></div>
@@ -242,14 +243,14 @@
   </div>
 
   <footer class="statusbar">
-    <span class="ok" id="scanState" data-i18n="ready">灏辩华</span>
+    <span class="ok" id="scanState" data-i18n="ready">就绪</span>
     <span class="dot-sep"></span>
     <span id="statusFiles">0 files compared</span>
     <span class="dot-sep"></span>
     <span id="statusLines">0 lines changed</span>
     <div class="right">
-      <a href="prd.html" id="prdLink" data-open-prd style="color:var(--blue);text-decoration:none;font-weight:650" data-i18n="prd">PRD 鏂囨。</a>
-      <span style="margin-left:10px">UTF-8 路 local only</span>
+      <a href="prd.html" id="prdLink" data-open-prd style="color:var(--blue);text-decoration:none;font-weight:650" data-i18n="prd">PRD 文档</a>
+      <span style="margin-left:10px">UTF-8 · local only</span>
     </div>
   </footer>
 </div>
@@ -258,30 +259,30 @@
 
 <div class="modal-backdrop" id="exportModal">
   <div class="modal">
-    <h3 data-i18n="export.title">瀵煎嚭鎶ュ憡</h3>
+    <h3 data-i18n="export.title">导出报告</h3>
     <div class="body">
-      <p data-i18n="export.desc">灏嗗姣旂粨鏋滃鍑哄埌鏈湴锛堜笉涓婁紶锛夈€?/p>
+      <p data-i18n="export.desc">将对比结果导出到本地（不上传）。</p>
       <div style="margin-top:14px;display:grid;gap:8px">
         <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
-          <input type="checkbox" checked data-fmt="patch" /> .patch 鈥?<span data-i18n="export.patch">unified diff</span>
+          <input type="checkbox" checked data-fmt="patch" /> .patch — <span data-i18n="export.patch">unified diff</span>
         </label>
         <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
-          <input type="checkbox" checked data-fmt="json" /> JSON 鈥?<span data-i18n="export.json">structured report</span>
+          <input type="checkbox" checked data-fmt="json" /> JSON — <span data-i18n="export.json">structured report</span>
         </label>
         <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
-          <input type="checkbox" data-fmt="md" /> Markdown 鈥?<span data-i18n="export.md">summary</span>
+          <input type="checkbox" data-fmt="md" /> Markdown — <span data-i18n="export.md">summary</span>
         </label>
         <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
-          <input type="checkbox" data-fmt="csv" /> CSV 鈥?<span data-i18n="export.csv">inventory</span>
+          <input type="checkbox" data-fmt="csv" /> CSV — <span data-i18n="export.csv">inventory</span>
         </label>
         <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:600">
-          <input type="checkbox" data-fmt="html" /> HTML 鈥?<span data-i18n="export.html">shareable</span>
+          <input type="checkbox" data-fmt="html" /> HTML — <span data-i18n="export.html">shareable</span>
         </label>
       </div>
     </div>
     <div class="foot">
-      <button class="btn btn-ghost" id="cancelExport" type="button" data-i18n="cancel">鍙栨秷</button>
-      <button class="btn btn-primary" id="confirmExport" type="button" data-i18n="ok">瀵煎嚭</button>
+      <button class="btn btn-ghost" id="cancelExport" type="button" data-i18n="cancel">取消</button>
+      <button class="btn btn-primary" id="confirmExport" type="button" data-i18n="ok">导出</button>
     </div>
   </div>
 </div>
@@ -292,4 +293,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-

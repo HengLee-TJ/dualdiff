@@ -1,4 +1,4 @@
-﻿/* Tauri bridge — used when running as Tauri desktop app */
+/* Tauri bridge — used when running as Tauri desktop app */
 (function () {
   "use strict";
   function hasTauri() {
