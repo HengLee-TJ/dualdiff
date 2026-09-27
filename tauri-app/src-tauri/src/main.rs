@@ -89,6 +89,7 @@ fn looks_binary(buf: &[u8]) -> bool {
 }
 
 fn decode_bytes(buf: &[u8]) -> String {
+    // BOM
     if buf.len() >= 3 && buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
         return String::from_utf8_lossy(&buf[3..]).into_owned();
     }
@@ -110,16 +111,44 @@ fn decode_bytes(buf: &[u8]) -> String {
         }
         return String::from_utf16_lossy(&u16s);
     }
-    if let Ok(s) = std::str::from_utf8(buf) {
-        return s.to_string();
+
+    fn score(s: &str) -> i32 {
+        let repl = s.matches('\u{FFFD}').count() as i32;
+        let cjk = s.chars().filter(|c| {
+            let u = *c as u32;
+            (0x4E00..=0x9FFF).contains(&u) || (0x3000..=0x303F).contains(&u)
+        }).count() as i32;
+        let ctrl = s
+            .chars()
+            .filter(|c| (*c as u32) < 32 && *c != '\n' && *c != '\r' && *c != '\t')
+            .count() as i32;
+        cjk * 3 - repl * 20 - ctrl * 10
     }
+
+    // strict UTF-8
+    let utf8 = std::str::from_utf8(buf).ok().map(|s| s.to_string());
+    // GB18030 / GBK
     let (cow, _, _) = encoding_rs::GB18030.decode(buf);
-    let s = cow.into_owned();
-    let bad = s.matches('\u{FFFD}').count();
-    if !s.is_empty() && bad * 50 > s.len() {
-        return String::from_utf8_lossy(buf).into_owned();
+    let gbk = cow.into_owned();
+    // lossy UTF-8 (last resort)
+    let lossy = String::from_utf8_lossy(buf).into_owned();
+
+    let mut best = String::new();
+    let mut best_score = i32::MIN;
+    for cand in [utf8.clone(), Some(gbk.clone()), Some(lossy.clone())]
+        .into_iter()
+        .flatten()
+    {
+        let sc = score(&cand);
+        if sc > best_score {
+            best_score = sc;
+            best = cand;
+        }
     }
-    s
+    if best.is_empty() {
+        return lossy;
+    }
+    best
 }
 
 fn scan_dir(root: &Path) -> Vec<FileEntry> {
