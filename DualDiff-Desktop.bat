@@ -1,14 +1,18 @@
 @echo off
 title DualDiff
 setlocal
-setROOT=%~dp0
-if exist%ROOT%DualDiff-Portable.exe (
-  start%ROOT%DualDiff-Portable.exe
+set "ROOT=%~dp0"
+if exist "%ROOT%DualDiff-Tauri.exe" (
+  start "" "%ROOT%DualDiff-Tauri.exe"
   exit /b 0
 )
-if exist%ROOT%desktop\node_modules\electron\dist\electron.exe (
-  start%ROOT%desktop\node_modules\electron\dist\electron.exe%ROOT%desktop
+if exist "%ROOT%DualDiff-Portable.exe" (
+  start "" "%ROOT%DualDiff-Portable.exe"
   exit /b 0
 )
-echo Run DualDiff-Desktop.vbs or install DualDiff-Portable.exe next to this script.
+if exist "%ROOT%tauri-app\src-tauri\target\release\dualdiff.exe" (
+  start "" "%ROOT%tauri-app\src-tauri\target\release\dualdiff.exe"
+  exit /b 0
+)
+echo DualDiff-Tauri.exe not found.
 pause
