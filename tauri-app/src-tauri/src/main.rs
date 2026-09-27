@@ -112,43 +112,33 @@ fn decode_bytes(buf: &[u8]) -> String {
         return String::from_utf16_lossy(&u16s);
     }
 
-    fn score(s: &str) -> i32 {
-        let repl = s.matches('\u{FFFD}').count() as i32;
-        let cjk = s.chars().filter(|c| {
-            let u = *c as u32;
-            (0x4E00..=0x9FFF).contains(&u) || (0x3000..=0x303F).contains(&u)
-        }).count() as i32;
-        let ctrl = s
-            .chars()
-            .filter(|c| (*c as u32) < 32 && *c != '\n' && *c != '\r' && *c != '\t')
-            .count() as i32;
-        cjk * 3 - repl * 20 - ctrl * 10
+    // 1) Valid UTF-8 wins outright.
+    //    (Scoring across encodings is unsafe: GBK-decoding UTF-8 bytes yields
+    //     even more "CJK-looking" characters and would win by count.)
+    if let Ok(s) = std::str::from_utf8(buf) {
+        return s.to_string();
     }
 
-    // strict UTF-8
-    let utf8 = std::str::from_utf8(buf).ok().map(|s| s.to_string());
-    // GB18030 / GBK
-    let (cow, _, _) = encoding_rs::GB18030.decode(buf);
+    // 2) Not valid UTF-8 → try GB18030 / GBK.
+    let (cow, _, had_errors) = encoding_rs::GB18030.decode(buf);
     let gbk = cow.into_owned();
-    // lossy UTF-8 (last resort)
-    let lossy = String::from_utf8_lossy(buf).into_owned();
 
-    let mut best = String::new();
-    let mut best_score = i32::MIN;
-    for cand in [utf8.clone(), Some(gbk.clone()), Some(lossy.clone())]
-        .into_iter()
-        .flatten()
-    {
-        let sc = score(&cand);
-        if sc > best_score {
-            best_score = sc;
-            best = cand;
+    fn bad_ratio(s: &str) -> f64 {
+        if s.is_empty() {
+            return 0.0;
+        }
+        let bad = s.matches('\u{FFFD}').count();
+        bad as f64 / s.chars().count() as f64
+    }
+
+    if had_errors || bad_ratio(&gbk) > 0.02 {
+        // GBK decode looks broken; fall back to lossy UTF-8
+        let lossy = String::from_utf8_lossy(buf).into_owned();
+        if bad_ratio(&lossy) < bad_ratio(&gbk) {
+            return lossy;
         }
     }
-    if best.is_empty() {
-        return lossy;
-    }
-    best
+    gbk
 }
 
 fn scan_dir(root: &Path) -> Vec<FileEntry> {
@@ -292,6 +282,41 @@ async fn save_text(app: tauri::AppHandle, default_name: String, content: String)
     };
     std::fs::write(&path_buf, content).ok()?;
     Some(path_buf.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CN: &str = "复位源检测模块实现，提供系统复位原因识别功能";
+
+    #[test]
+    fn utf8_content_stays_utf8() {
+        let bytes = CN.as_bytes(); // valid UTF-8
+        let out = decode_bytes(bytes);
+        assert_eq!(out, CN, "valid UTF-8 must not be misdetected as GBK");
+    }
+
+    #[test]
+    fn gbk_content_decodes() {
+        let (gbk, _, _) = encoding_rs::GB18030.encode(CN);
+        let out = decode_bytes(&gbk);
+        assert_eq!(out, CN, "GBK bytes must decode back to the same text");
+    }
+
+    #[test]
+    fn utf8_bom_stripped() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice(CN.as_bytes());
+        let out = decode_bytes(&bytes);
+        assert_eq!(out, CN);
+    }
+
+    #[test]
+    fn ascii_roundtrip() {
+        let s = "#include <stdio.h>\nint main(void){return 0;}\n";
+        assert_eq!(decode_bytes(s.as_bytes()), s);
+    }
 }
 
 fn main() {
