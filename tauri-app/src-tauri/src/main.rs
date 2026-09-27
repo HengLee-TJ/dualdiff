@@ -205,6 +205,24 @@ async fn pick_directory(app: tauri::AppHandle, side: Option<String>) -> Option<P
 }
 
 #[tauri::command]
+async fn scan_directory(path: String) -> Option<PickedDir> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.is_dir() {
+        return None;
+    }
+    let name = path_buf
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.clone());
+    let files = scan_dir(&path_buf);
+    Some(PickedDir {
+        root: path_buf.to_string_lossy().to_string(),
+        name,
+        files,
+    })
+}
+
+#[tauri::command]
 async fn read_files(paths: Vec<String>) -> HashMap<String, FileContent> {
     let mut out = HashMap::new();
     for p in paths {
@@ -281,6 +299,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             pick_directory,
+            scan_directory,
             read_files,
             save_text
         ])

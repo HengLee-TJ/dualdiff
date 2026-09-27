@@ -291,6 +291,29 @@
   margin-bottom: 10px;
 }
 
+/* Drag & drop onto Project A / B */
+.proj-field.drag-over {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: 0 0 0 3px rgba(91, 124, 159, 0.18);
+}
+.proj-field.drag-over .path {
+  color: var(--blue-dark);
+  font-weight: 650;
+}
+.proj-field.clickable {
+  cursor: pointer;
+}
+
+/* Refresh button */
+.refresh-btn.spinning .icon-svg {
+  animation: dd-spin 0.9s linear infinite;
+}
+@keyframes dd-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Language switch */
 .lang-switch {
   display: inline-flex;

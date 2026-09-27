@@ -73,6 +73,7 @@ if (!js.includes('picked.kind === "desktop"')) {
     `    const patterns = parseIgnorePatterns();
     if (picked.kind === "desktop" && window.DualDiffTauri) {
       side.root = picked.root || picked.name;
+      side.source = { kind: "desktop", rootPath: picked.root || picked.name };
       const list = (picked.files || []).filter((f) => !isIgnored(f.rel, patterns));
       const contents = await window.DualDiffTauri.readFiles(list.map((f) => f.path));
       const map = new Map();

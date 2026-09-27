@@ -13,6 +13,9 @@
     pickDirectory: function (side) {
       return invoke("pick_directory", { side: side });
     },
+    scanDirectory: function (path) {
+      return invoke("scan_directory", { path: path });
+    },
     readFiles: function (paths) {
       return invoke("read_files", { paths: paths });
     },

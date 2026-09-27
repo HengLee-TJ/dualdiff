@@ -1383,6 +1383,97 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     toast(`已导出 ${fmts.join(" · ")}`);
   }
 
+  // ---------- Drag & drop folders onto A / B ----------
+  function setDropHighlight(which) {
+    ["a", "b"].forEach((s) => {
+      const el = $(s === "a" ? "fieldA" : "fieldB");
+      if (el) el.classList.toggle("drag-over", s === which);
+    });
+  }
+
+  function clearDropHighlight() {
+    ["fieldA", "fieldB"].forEach((id) => $(id)?.classList.remove("drag-over"));
+  }
+
+  function sideFromPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    if (el.closest("#fieldA")) return "a";
+    if (el.closest("#fieldB")) return "b";
+    return null;
+  }
+
+  function bindDropTargets() {
+    // --- Tauri native drag & drop (uses real OS paths) ---
+    const tauri = window.__TAURI__;
+    if (tauri && tauri.webviewWindow) {
+      try {
+        const win = tauri.webviewWindow.getCurrentWebviewWindow();
+        if (win && win.onDragDropEvent) {
+          win.onDragDropEvent(async (event) => {
+            const payload = event && event.payload ? event.payload : {};
+            const dpr = window.devicePixelRatio || 1;
+            const pos = payload.position || {};
+            const x = (pos.x != null ? pos.x : pos.clientX) / dpr;
+            const y = (pos.y != null ? pos.y : pos.clientY) / dpr;
+            if (payload.type === "over" || payload.type === "enter") {
+              setDropHighlight(sideFromPoint(x, y));
+              return;
+            }
+            if (payload.type === "leave") {
+              clearDropHighlight();
+              return;
+            }
+            if (payload.type === "drop") {
+              const side = sideFromPoint(x, y) || (state.b.files.size ? "a" : "b");
+              clearDropHighlight();
+              const paths = payload.paths || [];
+              await handleDroppedPaths(paths, side);
+            }
+          });
+        }
+      } catch {
+        /* not Tauri */
+      }
+    }
+
+    // --- Browser HTML5 drag & drop ---
+    ["a", "b"].forEach((which) => {
+      const el = $(which === "a" ? "fieldA" : "fieldB");
+      if (!el) return;
+      el.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setDropHighlight(which);
+      });
+      el.addEventListener("dragleave", (e) => {
+        if (!el.contains(e.relatedTarget)) setDropHighlight(null);
+      });
+      el.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearDropHighlight();
+        const dt = e.dataTransfer;
+        if (!dt) return;
+        const items = [...(dt.items || [])];
+        const entries = items
+          .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+          .filter(Boolean);
+        const dirEntry = entries.find((en) => en && en.isDirectory);
+        if (dirEntry) {
+          await setProject(which, { kind: "entries", entries: [dirEntry], name: dirEntry.name });
+          return;
+        }
+        if (dt.files && dt.files.length) {
+          const root = (dt.files[0].webkitRelativePath || "").split("/")[0] || "Project";
+          await setProject(which, { kind: "input", files: [...dt.files], name: root });
+          return;
+        }
+        toast(t("toast.dropFail"));
+      });
+    });
+  }
+
   // ---------- Directory pickers ----------
   async function pickDirectory(which) {
     // Tauri desktop shell
@@ -1417,13 +1508,15 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
     });
   }
 
-  async function setProject(which, picked) {
+  async function setProject(which, picked, opts) {
     if (!picked) return;
+    const options = opts || {};
     const side = state[which];
     side.name = picked.name;
     const patterns = parseIgnorePatterns();
     if (picked.kind === "desktop" && window.DualDiffTauri) {
       side.root = picked.root || picked.name;
+      side.source = { kind: "desktop", rootPath: picked.root || picked.name };
       const list = (picked.files || []).filter((f) => !isIgnored(f.rel, patterns));
       const contents = await window.DualDiffTauri.readFiles(list.map((f) => f.path));
       const map = new Map();
@@ -1453,6 +1546,7 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       side.files = map;
     } else if (picked.kind === "fs") {
       side.root = picked.name;
+      side.source = { kind: "fs", handle: picked.handle };
       // fold project .gitignore if present at root
       try {
         const gi = await picked.handle.getFileHandle(".gitignore");
@@ -1465,8 +1559,15 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
         /* no .gitignore */
       }
       side.files = await scanDirectoryHandle(picked.handle, patterns);
+    } else if (picked.kind === "entries") {
+      // dropped folder (browser)
+      side.root = picked.name;
+      side.source = { kind: "entries", entries: picked.entries };
+      const map = await scanDroppedEntries(picked.entries, patterns);
+      side.files = map;
     } else {
       side.root = picked.name;
+      side.source = { kind: "input", files: picked.files };
       const list = picked.files || [];
       const gi = list.find((f) => ((f.webkitRelativePath || f.name).split("/").pop() || "").toLowerCase() === ".gitignore");
       if (gi) {
@@ -1481,16 +1582,162 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       side.files = await hydrateMap(scanInputFiles(list, patterns));
     }
     const pathEl = $(which === "a" ? "pathA" : "pathB");
-    if (pathEl) pathEl.textContent = `/${picked.name} · ${side.files.size} files`;
+    if (pathEl) {
+      const shown = picked.root || `/${picked.name}`;
+      pathEl.textContent = `${shown} · ${side.files.size} files`;
+      pathEl.title = shown;
+    }
     const labelEl = $(which === "a" ? "labelA" : "labelB");
     if (labelEl) labelEl.textContent = picked.name;
-    toast(
-      `${which.toUpperCase()} ${t("toast.loaded")}：${picked.name}（${side.files.size} files）`
-    );
+    if (!options.silent) {
+      toast(
+        `${which.toUpperCase()} ${t("toast.loaded")}：${picked.name}（${side.files.size} files）`
+      );
+    }
     updateReady();
     // both projects ready → compare immediately
-    if (state.a.files.size && state.b.files.size) {
+    if (!options.skipCompare && state.a.files.size && state.b.files.size) {
       await runCompare();
+    }
+  }
+
+  /**
+   * Read folders dropped from the OS (browser HTML5 drag).
+   * entries: FileSystemEntry list
+   */
+  async function scanDroppedEntries(entries, patterns) {
+    const map = new Map();
+    async function readEntry(entry, prefix) {
+      if (!entry) return;
+      if (entry.isFile) {
+        const file = await new Promise((res) => entry.file(res, () => res(null)));
+        if (!file) return;
+        const rel = prefix + entry.name;
+        if (isIgnored(rel, patterns)) return;
+        if (file.size > 2 * 1024 * 1024) {
+          map.set(rel, {
+            rel,
+            name: entry.name,
+            size: file.size,
+            text: null,
+            hash: fnv1a(String(file.size) + rel),
+            binary: true,
+            large: true,
+          });
+          return;
+        }
+        const buf = new Uint8Array(await file.arrayBuffer());
+        if (looksBinary(buf)) {
+          map.set(rel, {
+            rel,
+            name: entry.name,
+            size: file.size,
+            text: null,
+            hash: fnv1a(String(file.size) + rel + buf.subarray(0, 64).join(",")),
+            binary: true,
+            large: false,
+          });
+          return;
+        }
+        const decoded = decodeText(buf);
+        map.set(rel, {
+          rel,
+          name: entry.name,
+          size: file.size,
+          text: decoded.text,
+          enc: decoded.enc,
+          hash: fnv1a(contentKey(decoded.text)),
+          binary: false,
+          large: false,
+        });
+        return;
+      }
+      if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const children = await new Promise((resolve) => {
+          const all = [];
+          const readBatch = () => {
+            reader.readEntries(
+              (batch) => {
+                if (!batch.length) return resolve(all);
+                all.push(...batch);
+                readBatch();
+              },
+              () => resolve(all)
+            );
+          };
+          readBatch();
+        });
+        const nextPrefix = prefix + entry.name + "/";
+        if (isIgnored(nextPrefix.slice(0, -1), patterns)) return;
+        for (const c of children) await readEntry(c, nextPrefix);
+      }
+    }
+    for (const e of entries) await readEntry(e, "");
+    return map;
+  }
+
+  /** Tauri native drag & drop → paths */
+  async function handleDroppedPaths(paths, side) {
+    if (!window.DualDiffTauri || !paths || !paths.length) return false;
+    const dir = paths.find((p) => !/\.[A-Za-z0-9]{1,8}$/.test(p)) || paths[0];
+    const res = await window.DualDiffTauri.scanDirectory(dir);
+    if (!res) {
+      toast(t("toast.dropFail"));
+      return false;
+    }
+    await setProject(side, { kind: "desktop", name: res.name, root: res.root, files: res.files });
+    return true;
+  }
+
+  // ---------- Refresh ----------
+  async function rescanSide(which) {
+    const side = state[which];
+    const src = side.source;
+    if (!src) return false;
+    if (src.kind === "desktop") {
+      const res = await window.DualDiffTauri.scanDirectory(src.rootPath);
+      if (!res) return false;
+      await setProject(
+        which,
+        { kind: "desktop", name: res.name, root: res.root, files: res.files },
+        { silent: true, skipCompare: true }
+      );
+      return true;
+    }
+    if (src.kind === "fs") {
+      await setProject(which, { kind: "fs", handle: src.handle, name: src.handle.name }, { silent: true, skipCompare: true });
+      return true;
+    }
+    if (src.kind === "entries") {
+      await setProject(which, { kind: "entries", entries: src.entries, name: side.name }, { silent: true, skipCompare: true });
+      return true;
+    }
+    if (src.kind === "input") {
+      await setProject(which, { kind: "input", files: src.files, name: side.name }, { silent: true, skipCompare: true });
+      return true;
+    }
+    return false;
+  }
+
+  async function refreshCompare() {
+    if (!state.a.source || !state.b.source) {
+      toast(t("toast.needRefreshSource"));
+      return;
+    }
+    const btn = $("refreshBtn");
+    btn?.classList.add("spinning");
+    const scanState = $("scanState");
+    if (scanState) scanState.textContent = t("scanning");
+    try {
+      await rescanSide("a");
+      await rescanSide("b");
+      await runCompare({ preserveSelection: true });
+      toast(t("toast.refreshed"));
+    } catch (e) {
+      toast(t("toast.refreshFail"));
+    } finally {
+      btn?.classList.remove("spinning");
     }
   }
 
@@ -1636,9 +1883,12 @@ th{background:#f6f8fb} .m{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
       await setProject("b", p);
     });
     $("swapBtn")?.addEventListener("click", swapProjects);
+    $("refreshBtn")?.addEventListener("click", refreshCompare);
     $("compareBtn")?.addEventListener("click", runCompare);
     $("emptyCompare")?.addEventListener("click", runCompare);
     $("demoBtn")?.addEventListener("click", loadDemo);
+
+    bindDropTargets();
 
     $("searchInput")?.addEventListener("input", (e) => {
       state.search = e.target.value.trim();
