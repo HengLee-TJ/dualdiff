@@ -27,3 +27,4 @@ tauri-app/node_modules/
 *.exe
 assets/_chk_*
 .mimocode/
+skill-update.log

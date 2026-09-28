@@ -8,7 +8,7 @@ const t = fs.readFileSync(SKILL, "utf8");
 
 const checks = [
   ["A scan_dir defined", /fn scan_dir\(root: &Path\)/.test(t)],
-  ["B exe path correct", t.includes("src-tauri/target/release/DualDiff.exe") && !t.includes("dist/dualdiff.exe")],
+  ["B exe path correct", t.includes("src-tauri/target/release/dualdiff.exe") && !t.includes("dist/dualdiff.exe")],
   ["C no ELECTRON_MIRROR", !/ELECTRON_MIRROR/.test(t)],
   ["D numbering note", t.includes("编号说明")],
   ["E1 no placeholders", !["TBD", "TODO", "待补充", "implement later", "fill in details"].some((s) => t.includes(s))],
