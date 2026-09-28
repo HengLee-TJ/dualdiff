@@ -25,3 +25,4 @@ assets/VERIFY_*
 tauri-app/src-tauri/target/
 tauri-app/node_modules/
 *.exe
+assets/_chk_*
