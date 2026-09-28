@@ -4,6 +4,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const UI = path.join(ROOT, "tauri-app", "ui");
@@ -46,6 +47,7 @@ if (!html.includes("tauri-bridge.js")) {
 }
 fs.writeFileSync(htmlPath, html, "utf8");
 console.log("patched index.html");
+
 
 // ---- patch app.js ----
 const jsPath = path.join(UI, "app.js");
@@ -142,4 +144,11 @@ for (const [f, needle] of Object.entries(checks)) {
   console.log(f, "has clean CJK:", ok, "garbled:", garbled);
   if (!ok || garbled) bad = true;
 }
-process.exit(bad ? 1 : 0);
+if (bad) process.exit(1);
+try {
+  execFileSync(process.execPath, [path.join(__dirname, "scrub-ai-marks.js"), ROOT], { stdio: "inherit" });
+} catch (e) {
+  console.error("scrub failed", e.message);
+  process.exit(1);
+}
+process.exit(0);
